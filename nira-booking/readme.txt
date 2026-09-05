@@ -5,7 +5,7 @@ Tags:              booking, reservation, airbnb, stripe, gite, equestre
 Requires at least: 6.0
 Tested up to:      6.6
 Requires PHP:      7.4
-Stable tag:        2.0.46
+Stable tag:        2.0.47
 License:           GPLv2 or later
 
 Système de réservation complet pour les gîtes des Écuries de Nira, avec
@@ -100,6 +100,9 @@ nira-booking/
 * Webhook Stripe signé (vérif via `whsec_…`).
 
 == Changelog ==
+
+= 2.0.47 =
+* Annuler une réservation déjà remboursée depuis le dashboard Stripe fonctionne : le plugin prend acte du remboursement existant (« charge already refunded ») et termine l'annulation en libérant les dates, au lieu d'afficher une erreur et de laisser la réservation confirmée.
 
 = 2.0.46 =
 * Liste des réservations épurée : les holds « en attente » (paniers en cours de paiement, expiration automatique) sont masqués par défaut du tableau et du tableau de bord ; ils restent accessibles via le filtre de statut.

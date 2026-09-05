@@ -202,6 +202,17 @@ class Nira_Booking {
         if ( $refund > 0 && ! empty( $booking->stripe_payment_intent ) ) {
             $res = Nira_Stripe::refund( $booking->stripe_payment_intent, $refund, $booking->currency );
             if ( is_wp_error( $res ) ) {
+                // « Charge already refunded » : le remboursement a déjà été
+                // fait depuis le dashboard Stripe. On en prend acte et on
+                // termine l'annulation au lieu de la bloquer.
+                $err_data = $res->get_error_data();
+                $err_code = is_array( $err_data ) ? ( $err_data['error']['code'] ?? '' ) : '';
+                if ( 'charge_already_refunded' === $err_code
+                     || false !== stripos( $res->get_error_message(), 'already been refunded' ) ) {
+                    self::record_external_refund( $booking, (float) $booking->amount_paid, true );
+                    do_action( 'nira_booking_cancelled', (int) $id, 0.0 );
+                    return [ 'refunded' => 0.0 ];
+                }
                 return $res;
             }
         }
