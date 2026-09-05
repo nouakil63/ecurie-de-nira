@@ -561,7 +561,7 @@
      */
     NiraWidget.prototype.updateHeaderPrice = function () {
         if (!this.quote || !this.els.amount) return;
-        var per = this.quote.avg_nightly || this.quote.base / Math.max(1, this.quote.nights);
+        var per = this.quote.avg_nightly || this.quote.subtotal_raw / Math.max(1, this.quote.nights);
         if (!per || isNaN(per)) return;
         // Format identique au rendu serveur
         this.els.amount.innerHTML = this.formatPriceShort(per);
@@ -590,7 +590,7 @@
         }
         var q = this.quote;
         var sym = this.currencySymbol;
-        var subLabel = (q.avg_nightly ? money(q.avg_nightly, sym) : money(q.base, sym)) + ' × ' +
+        var subLabel = money(q.avg_nightly || (q.subtotal_raw / Math.max(1, q.nights)), sym) + ' × ' +
                        q.nights + ' ' + (q.nights > 1 ? (I18N.nights || 'nuits') : (I18N.night || 'nuit'));
         var subRowValue = q.subtotal_raw || q.base || (q.subtotal + (q.discount || 0));
         bd.hidden = false;
@@ -602,8 +602,9 @@
                    (q.discount_type === 'monthly' ? 'Remise au mois' : 'Remise à la semaine') +
                    ' (−' + q.discount_pct + ' %)</span><span>− ' + money(q.discount, sym) + '</span></div>')
                 : '') +
-            (q.cleaning ? ('<div class="nira-row nira-cleaning-row"><span>Frais de ménage</span><span>' + money(q.cleaning, sym) + '</span></div>') : '') +
-            (q.taxes ? ('<div class="nira-row nira-taxes-row"><span>Taxes</span><span>' + money(q.taxes, sym) + '</span></div>') : '') +
+            (q.cleaning_fee ? ('<div class="nira-row nira-cleaning-row"><span>Frais de ménage</span><span>' + money(q.cleaning_fee, sym) + '</span></div>') : '') +
+            (q.tourist_tax ? ('<div class="nira-row nira-taxes-row"><span>Taxe de séjour</span><span>' + money(q.tourist_tax, sym) + '</span></div>') : '') +
+            ((q.taxes - (q.tourist_tax || 0)) > 0.001 ? ('<div class="nira-row nira-taxes-row"><span>TVA</span><span>' + money(q.taxes - (q.tourist_tax || 0), sym) + '</span></div>') : '') +
             '<div class="nira-row nira-total-row"><span>' + (I18N.total || 'Total') + '</span><span>' + money(q.total, sym) + '</span></div>' +
             (this.chargeMode === 'deposit' && q.deposit
                 ? ('<div class="nira-row nira-deposit-row"><span>Acompte à verser</span><span>' + money(q.deposit, sym) + '</span></div>')
@@ -658,9 +659,11 @@
         html += '<div class="nira-modal-summary-row"><span>Dates</span><strong>' +
                 formatDateFR(this.checkIn) + ' → ' + formatDateFR(this.checkOut) + '</strong></div>';
         html += '<div class="nira-modal-summary-row"><span>Voyageurs</span><strong>' + this.guests + '</strong></div>';
-        html += '<div class="nira-modal-summary-row"><span>' + q.nights + ' ' + (q.nights > 1 ? 'nuits' : 'nuit') + '</span><span>' + money(q.base, sym) + '</span></div>';
-        if (q.cleaning) html += '<div class="nira-modal-summary-row"><span>Ménage</span><span>' + money(q.cleaning, sym) + '</span></div>';
-        if (q.taxes)    html += '<div class="nira-modal-summary-row"><span>Taxes</span><span>' + money(q.taxes, sym) + '</span></div>';
+        html += '<div class="nira-modal-summary-row"><span>' + q.nights + ' ' + (q.nights > 1 ? 'nuits' : 'nuit') + '</span><span>' + money(q.subtotal_raw, sym) + '</span></div>';
+        if (q.discount > 0) html += '<div class="nira-modal-summary-row"><span>' + (q.discount_type === 'monthly' ? 'Remise au mois' : 'Remise à la semaine') + ' (−' + q.discount_pct + ' %)</span><span>− ' + money(q.discount, sym) + '</span></div>';
+        if (q.cleaning_fee) html += '<div class="nira-modal-summary-row"><span>Ménage</span><span>' + money(q.cleaning_fee, sym) + '</span></div>';
+        if (q.tourist_tax)  html += '<div class="nira-modal-summary-row"><span>Taxe de séjour</span><span>' + money(q.tourist_tax, sym) + '</span></div>';
+        if ((q.taxes - (q.tourist_tax || 0)) > 0.001) html += '<div class="nira-modal-summary-row"><span>TVA</span><span>' + money(q.taxes - (q.tourist_tax || 0), sym) + '</span></div>';
         html += '<div class="nira-modal-summary-row nira-modal-summary-total"><span>Total</span><span>' + money(q.total, sym) + '</span></div>';
         if (this.chargeMode === 'deposit' && q.deposit) {
             html += '<div class="nira-modal-summary-row" style="color:var(--nb-bordeaux);font-weight:600"><span>Acompte aujourd\'hui</span><span>' + money(q.deposit, sym) + '</span></div>';
@@ -791,6 +794,15 @@
                     return;
                 }
                 if (result.paymentIntent && (result.paymentIntent.status === 'succeeded' || result.paymentIntent.status === 'processing')) {
+                    // Confirmation serveur : ne PAS dépendre du seul webhook
+                    // Stripe, sinon le hold expire et la réservation payée
+                    // disparaît de l'admin si le webhook est mal configuré.
+                    if (self.booking && result.paymentIntent.status === 'succeeded') {
+                        post('nira_confirm_payment', {
+                            booking_id: self.booking.booking_id,
+                            payment_intent: result.paymentIntent.id
+                        }).catch(function () { /* le webhook reste le second filet */ });
+                    }
                     self.renderSuccess();
                 }
             });

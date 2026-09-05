@@ -142,6 +142,18 @@ class Nira_Stripe {
         ];
     }
 
+    /**
+     * Récupère un PaymentIntent depuis l'API Stripe (source de vérité).
+     * Sert à confirmer un paiement côté serveur sans dépendre du webhook.
+     */
+    public static function retrieve_payment_intent( $intent_id ) {
+        $intent_id = sanitize_text_field( (string) $intent_id );
+        if ( ! preg_match( '/^pi_[A-Za-z0-9]+$/', $intent_id ) ) {
+            return new WP_Error( 'nira_bad_intent', __( 'Identifiant de paiement invalide.', 'nira-booking' ) );
+        }
+        return self::request( 'GET', 'payment_intents/' . rawurlencode( $intent_id ) );
+    }
+
     public static function refund( $payment_intent, $amount, $currency = 'EUR' ) {
         if ( empty( $payment_intent ) ) {
             return new WP_Error( 'nira_no_intent', __( 'Aucun paiement à rembourser.', 'nira-booking' ) );
@@ -165,7 +177,11 @@ class Nira_Stripe {
         $sig     = $request->get_header( 'stripe_signature' );
         $secret  = self::webhook_secret();
 
-        if ( $secret && $sig && ! $this->verify_signature( $payload, $sig, $secret ) ) {
+        // Signature OBLIGATOIRE : sans secret configuré ou sans en-tête signé,
+        // on refuse tout — sinon n'importe qui peut forger un
+        // payment_intent.succeeded et confirmer une réservation sans payer.
+        if ( ! $secret || ! $sig || ! $this->verify_signature( $payload, $sig, $secret ) ) {
+            error_log( '[Nira Stripe] Webhook rejeté : signature absente ou invalide' . ( $secret ? '' : ' (secret non configuré)' ) );
             return new WP_REST_Response( [ 'error' => 'signature' ], 400 );
         }
 
@@ -181,8 +197,20 @@ class Nira_Stripe {
             $booking_id = (int) ( $obj['metadata']['booking_id'] ?? 0 );
             $amount     = (float) ( $obj['amount_received'] ?? 0 ) / 100;
             if ( $booking_id ) {
-                Nira_Booking::mark_paid( $booking_id, $obj['id'], $amount );
-                Nira_Email::send_confirmation( $booking_id );
+                $result = Nira_Booking::mark_paid( $booking_id, $obj['id'], $amount );
+                if ( true === $result ) {
+                    // Email uniquement au premier traitement (les webhooks Stripe
+                    // peuvent être livrés plusieurs fois).
+                    Nira_Email::send_confirmation( $booking_id );
+                } elseif ( false === $result ) {
+                    // Paiement encaissé mais réservation introuvable : alerte admin.
+                    error_log( '[Nira Stripe] Paiement reçu pour réservation introuvable #' . $booking_id . ' (' . ( $obj['id'] ?? '?' ) . ')' );
+                    wp_mail(
+                        get_option( 'admin_email' ),
+                        __( '[Nira] Paiement reçu sans réservation', 'nira-booking' ),
+                        sprintf( "Un paiement Stripe a été reçu pour la réservation #%d mais celle-ci est introuvable.\nPaymentIntent : %s\nMontant : %s\nVérifiez le dashboard Stripe et recontactez le client.", $booking_id, $obj['id'] ?? '?', $amount )
+                    );
+                }
             }
         } elseif ( 'charge.refunded' === $type ) {
             do_action( 'nira_stripe_refund_webhook', $obj );
@@ -200,6 +228,12 @@ class Nira_Stripe {
             }
         }
         if ( empty( $parts['t'] ) || empty( $parts['v1'] ) ) {
+            return false;
+        }
+        // Anti-rejeu : tolérance de 5 minutes sur l'horodatage signé
+        // (recommandation Stripe). Un payload capturé ne peut pas être
+        // rejoué indéfiniment.
+        if ( abs( time() - (int) $parts['t'] ) > 5 * MINUTE_IN_SECONDS ) {
             return false;
         }
         $signed   = $parts['t'] . '.' . $payload;

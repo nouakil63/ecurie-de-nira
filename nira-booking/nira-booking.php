@@ -3,7 +3,7 @@
  * Plugin Name:       Nira Booking — Écuries de Nira
  * Plugin URI:        https://ecuriedenira.fr
  * Description:       Système de réservation complet pour les gîtes : calendrier Airbnb-like, paiement Stripe, synchronisation iCal, tarifs saisonniers, horaires et annulations entièrement configurables.
- * Version:           2.0.40
+ * Version:           2.0.41
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NOK'S Consulting
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'NIRA_BOOKING_VERSION', '2.0.40' );
+define( 'NIRA_BOOKING_VERSION', '2.0.41' );
 define( 'NIRA_BOOKING_FILE',    __FILE__ );
 define( 'NIRA_BOOKING_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'NIRA_BOOKING_URL',     plugin_dir_url( __FILE__ ) );

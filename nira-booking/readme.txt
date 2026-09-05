@@ -5,7 +5,7 @@ Tags:              booking, reservation, airbnb, stripe, gite, equestre
 Requires at least: 6.0
 Tested up to:      6.6
 Requires PHP:      7.4
-Stable tag:        2.0.2
+Stable tag:        2.0.41
 License:           GPLv2 or later
 
 Système de réservation complet pour les gîtes des Écuries de Nira, avec
@@ -100,6 +100,14 @@ nira-booking/
 * Webhook Stripe signé (vérif via `whsec_…`).
 
 == Changelog ==
+
+= 2.0.41 =
+* Fiabilité paiement : confirmation de la réservation directement après le paiement (endpoint `nira_confirm_payment` qui revérifie le PaymentIntent auprès de Stripe) — le webhook n'est plus un point de défaillance unique.
+* Correctif critique : les holds expirés ou remplacés sont annulés au lieu d'être supprimés — un paiement arrivé en retard retrouve sa réservation (fini les réservations payées qui disparaissent de l'admin).
+* Sécurité : signature du webhook Stripe désormais obligatoire (rejet si secret absent ou en-tête manquant), tolérance anti-rejeu de 5 minutes, traitement idempotent des webhooks livrés en double.
+* Affichage prix : le récapitulatif du paiement affichait « NaN » et omettait les frais de ménage ; détail désormais complet (nuits, remise, ménage, taxe de séjour, TVA) et cohérent avec le total.
+* iCal : chaque flux ne supprime plus que ses propres imports (fini l'effacement croisé entre Airbnb et Booking), fetch sécurisé anti-SSRF, plus de référence interne exposée dans l'export public.
+* Divers : anti-abus sur la création de hold (5/15 min par IP), correction du fuseau horaire d'expiration des holds, validation des statuts/dates/chevauchements à la modification d'une réservation dans l'admin.
 
 = 2.0.0 =
 * Refonte complète : admin server-rendered, widget frontend façon Airbnb,

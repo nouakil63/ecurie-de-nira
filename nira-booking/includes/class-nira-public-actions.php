@@ -278,6 +278,22 @@ final class Nira_Public_Actions {
                         return;
                     }
                     if (res.paymentIntent && (res.paymentIntent.status === 'succeeded' || res.paymentIntent.status === 'processing')) {
+                        // Confirmation serveur immédiate (filet si le webhook
+                        // Stripe est indisponible) — le serveur revérifie tout
+                        // auprès de Stripe avant d'enregistrer.
+                        if (res.paymentIntent.status === 'succeeded') {
+                            var fd = new URLSearchParams();
+                            fd.append('action', 'nira_confirm_payment');
+                            fd.append('nonce', <?php echo wp_json_encode( wp_create_nonce( 'nira_booking' ) ); ?>);
+                            fd.append('booking_id', <?php echo (int) $b->id; ?>);
+                            fd.append('payment_intent', res.paymentIntent.id);
+                            fetch(<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>, {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                                body: fd.toString()
+                            }).catch(function () {});
+                        }
                         document.querySelector('.nb-card').innerHTML =
                             '<div class="nb-logo">Écurie de Nira</div>' +
                             '<div class="nb-success"><strong>✓ Paiement reçu.</strong> Merci, votre solde est réglé. Un email de confirmation va vous être envoyé.</div>';

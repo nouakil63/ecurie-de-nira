@@ -21,10 +21,11 @@ class Nira_Ajax {
 
     private function __construct() {
         $routes = [
-            'nira_get_calendar'  => 'get_calendar',
-            'nira_get_quote'     => 'get_quote',
-            'nira_create_hold'   => 'create_hold',
-            'nira_refresh_nonce' => 'refresh_nonce',
+            'nira_get_calendar'     => 'get_calendar',
+            'nira_get_quote'        => 'get_quote',
+            'nira_create_hold'      => 'create_hold',
+            'nira_confirm_payment'  => 'confirm_payment',
+            'nira_refresh_nonce'    => 'refresh_nonce',
         ];
         foreach ( $routes as $action => $method ) {
             add_action( "wp_ajax_{$action}",        [ $this, $method ] );
@@ -98,7 +99,7 @@ class Nira_Ajax {
         $guests    = max( 1, (int) ( $_POST['guests'] ?? 1 ) );
 
         $property = Nira_Properties::instance()->get_by_slug( $slug );
-        if ( ! $property ) {
+        if ( ! $property || 'active' !== $property->status ) {
             wp_send_json_error( [ 'message' => __( 'Hébergement introuvable.', 'nira-booking' ) ], 404 );
         }
         if ( ! Nira_Booking::valid_date( $check_in ) || ! Nira_Booking::valid_date( $check_out ) ) {
@@ -132,6 +133,17 @@ class Nira_Ajax {
             wp_send_json_error( [ 'message' => __( 'Nom et e-mail obligatoires.', 'nira-booking' ) ], 400 );
         }
 
+        // Anti-abus : create_hold bloque des dates sans paiement. On limite
+        // à 5 tentatives par IP par quart d'heure pour empêcher un script
+        // de verrouiller tout le calendrier avec des emails jetables.
+        $ip  = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+        $key = 'nira_hold_rl_' . md5( $ip );
+        $attempts = (int) get_transient( $key );
+        if ( $attempts >= 5 ) {
+            wp_send_json_error( [ 'message' => __( 'Trop de tentatives, merci de réessayer dans quelques minutes.', 'nira-booking' ) ], 429 );
+        }
+        set_transient( $key, $attempts + 1, 15 * MINUTE_IN_SECONDS );
+
         $booking_id = Nira_Booking::create( $payload );
         if ( is_wp_error( $booking_id ) ) {
             wp_send_json_error( [ 'message' => $booking_id->get_error_message() ], 400 );
@@ -151,5 +163,50 @@ class Nira_Ajax {
             'amount'        => $intent['amount'],
             'client_secret' => $intent['client_secret'],
         ] );
+    }
+
+    /**
+     * Confirmation d'un paiement côté serveur, appelée par le navigateur
+     * juste après stripe.confirmPayment(). Filet de sécurité indispensable :
+     * si le webhook Stripe n'est pas configuré ou tombe en panne, c'est ce
+     * chemin qui confirme la réservation — sans lui, le hold expire et la
+     * réservation payée disparaît de l'admin.
+     *
+     * Sûr par construction : on ne croit pas le client, on relit le
+     * PaymentIntent directement chez Stripe (statut, montant, booking_id).
+     */
+    public function confirm_payment() {
+        $this->verify();
+
+        $booking_id = (int) ( $_POST['booking_id'] ?? 0 );
+        $intent_id  = sanitize_text_field( $_POST['payment_intent'] ?? '' );
+
+        if ( ! $booking_id || ! $intent_id ) {
+            wp_send_json_error( [ 'message' => __( 'Paramètres manquants.', 'nira-booking' ) ], 400 );
+        }
+
+        $pi = Nira_Stripe::retrieve_payment_intent( $intent_id );
+        if ( is_wp_error( $pi ) ) {
+            wp_send_json_error( [ 'message' => $pi->get_error_message() ], 502 );
+        }
+
+        if ( ( $pi['status'] ?? '' ) !== 'succeeded' ) {
+            wp_send_json_error( [ 'message' => __( 'Paiement non finalisé.', 'nira-booking' ) ], 409 );
+        }
+        if ( (int) ( $pi['metadata']['booking_id'] ?? 0 ) !== $booking_id ) {
+            wp_send_json_error( [ 'message' => __( 'Paiement sans rapport avec cette réservation.', 'nira-booking' ) ], 403 );
+        }
+
+        $amount = (float) ( $pi['amount_received'] ?? 0 ) / 100;
+        $result = Nira_Booking::mark_paid( $booking_id, $pi['id'], $amount );
+
+        if ( true === $result ) {
+            Nira_Email::send_confirmation( $booking_id );
+        } elseif ( false === $result ) {
+            wp_send_json_error( [ 'message' => __( 'Réservation introuvable.', 'nira-booking' ) ], 404 );
+        }
+        // 'already' : webhook passé avant nous — tout va bien.
+
+        wp_send_json_success( [ 'confirmed' => true ] );
     }
 }

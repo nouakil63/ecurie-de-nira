@@ -110,7 +110,7 @@ class Nira_Ical {
         if ( $feed ) {
             // On nettoie aussi les imports liés à ce feed pour ne pas laisser
             // de réservations fantômes dans le calendrier.
-            self::remove_imported_for_feed( (int) $feed->property_id, $feed->url );
+            self::remove_imported_for_feed( (int) $feed->property_id, (int) $feed->id );
         }
         return $wpdb->delete( Nira_DB::tbl( 'ical_feeds' ), [ 'id' => (int) $id ] );
     }
@@ -144,11 +144,14 @@ class Nira_Ical {
         $url = $feed->url ?? '';
         if ( ! $url ) return 0;
 
-        // 1) Fetch
-        $res = wp_remote_get( $url, [
-            'timeout'    => 30,
-            'sslverify'  => true,
-            'user-agent' => 'Mozilla/5.0 (compatible; NiraBooking/2.0; +' . home_url() . ')',
+        // 1) Fetch — wp_safe_remote_get refuse les IP privées/loopback et les
+        // redirections dangereuses (anti-SSRF : le cron ne doit pas pouvoir
+        // requêter le réseau interne via une URL de flux malveillante).
+        $res = wp_safe_remote_get( $url, [
+            'timeout'             => 30,
+            'sslverify'           => true,
+            'reject_unsafe_urls'  => true,
+            'user-agent'          => 'Mozilla/5.0 (compatible; NiraBooking/2.0; +' . home_url() . ')',
         ] );
 
         $code = is_wp_error( $res ) ? 0 : (int) wp_remote_retrieve_response_code( $res );
@@ -170,11 +173,11 @@ class Nira_Ical {
 
         // 3) Fetch OK → on peut maintenant remplacer proprement
         $source = self::detect_source( $url );
-        self::remove_imported_for_feed( (int) $feed->property_id, $url );
+        self::remove_imported_for_feed( (int) $feed->property_id, (int) $feed->id );
 
         $count = 0;
         foreach ( $events as $ev ) {
-            if ( $this->insert_imported_event( (int) $feed->property_id, $feed->label, $source, $url, $ev ) ) {
+            if ( $this->insert_imported_event( (int) $feed->property_id, (int) $feed->id, $source, $url, $ev ) ) {
                 $count++;
             }
         }
@@ -183,7 +186,7 @@ class Nira_Ical {
         return $count;
     }
 
-    private function insert_imported_event( $property_id, $source_label, $source, $source_url, $event ) {
+    private function insert_imported_event( $property_id, $feed_id, $source, $source_url, $event ) {
         global $wpdb;
         $table = Nira_DB::tbl( 'bookings' );
         $now   = current_time( 'mysql' );
@@ -210,6 +213,7 @@ class Nira_Ical {
             'guest_email'    => $source . '@import.local',
             'nights'         => Nira_Pricing::count_nights( $in, $out ),
             'ical_uid'       => $uid,
+            'ical_feed_id'   => (int) $feed_id,
             'updated_at'     => $now,
         ];
 
@@ -234,17 +238,23 @@ class Nira_Ical {
     }
 
     /**
-     * Supprime les imports précédents liés à ce feed (par property + status airbnb).
-     * On ne touche QUE les enregistrements 'airbnb' (status) avec ical_uid présent.
+     * Supprime les imports précédents de CE flux uniquement (ical_feed_id).
+     * Impératif avec plusieurs flux par propriété (Airbnb + Booking…) : la
+     * sync du flux A ne doit jamais effacer les blocages importés du flux B —
+     * sinon, si B est en panne au moment de sa propre sync, ses dates
+     * disparaissent du calendrier jusqu'à son rétablissement.
+     * Les lignes historiques sans feed_id (avant migration 2.0.41) sont
+     * rattachées au premier flux qui synchronise pour cette propriété.
      */
-    private static function remove_imported_for_feed( $property_id, $url ) {
+    private static function remove_imported_for_feed( $property_id, $feed_id ) {
         global $wpdb;
         $table = Nira_DB::tbl( 'bookings' );
-        // On supprime toutes les imports iCal de cette propriété : la nouvelle
-        // sync va tout réinsérer. Sécurité : status='airbnb' + ical_uid not null.
         $wpdb->query( $wpdb->prepare(
-            "DELETE FROM {$table} WHERE property_id = %d AND status = 'airbnb' AND ical_uid IS NOT NULL AND ical_uid != ''",
-            $property_id
+            "DELETE FROM {$table}
+             WHERE property_id = %d AND status = 'airbnb'
+               AND ical_uid IS NOT NULL AND ical_uid != ''
+               AND (ical_feed_id = %d OR ical_feed_id IS NULL OR ical_feed_id = 0)",
+            $property_id, (int) $feed_id
         ) );
     }
 
@@ -364,7 +374,9 @@ class Nira_Ical {
                 'uid'     => 'nira-' . $b->id . '@' . wp_parse_url( home_url(), PHP_URL_HOST ),
                 'start'   => $b->check_in,
                 'end'     => $b->check_out,
-                'summary' => 'Nira #' . $b->reference,
+                // Libellé générique : l'URL d'export est publique et devinable,
+                // on n'y expose pas les références internes de réservation.
+                'summary' => 'Réservé',
                 'created' => $b->created_at ?? $b->updated_at ?? null,
             ];
         }

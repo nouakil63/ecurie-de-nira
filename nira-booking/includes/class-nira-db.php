@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Nira_DB {
 
-    const VERSION = '2.0.2';
+    const VERSION = '2.0.41';
 
     public static function tbl( $name ) {
         global $wpdb;
@@ -89,6 +89,7 @@ class Nira_DB {
             stripe_payment_intent VARCHAR(100) NULL,
             stripe_customer VARCHAR(100) NULL,
             ical_uid VARCHAR(191) NULL,
+            ical_feed_id BIGINT(20) UNSIGNED NULL,
             notes TEXT NULL,
             balance_request_sent_at DATETIME NULL,
             created_at DATETIME NOT NULL,

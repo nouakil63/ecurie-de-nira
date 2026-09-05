@@ -439,7 +439,24 @@ class Nira_Admin {
             'notes'       => sanitize_textarea_field( $data['notes'] ?? '' ),
             'updated_at'  => current_time( 'mysql' ),
         ];
+
+        $allowed_statuses = [ 'pending', 'confirmed', 'cancelled', 'refunded', 'blocked', 'airbnb' ];
+        if ( ! in_array( $fields['status'], $allowed_statuses, true ) ) {
+            $fields['status'] = 'pending';
+        }
+        if ( ! Nira_Booking::valid_date( $fields['check_in'] ) || ! Nira_Booking::valid_date( $fields['check_out'] )
+             || $fields['check_in'] >= $fields['check_out'] ) {
+            $this->redirect( 'nira-bookings', __( 'Dates invalides.', 'nira-booking' ), 'error' );
+        }
+
         if ( $id ) {
+            $existing = Nira_Booking::get( $id );
+            if ( $existing
+                 && in_array( $fields['status'], [ 'pending', 'confirmed', 'blocked' ], true )
+                 && ! Nira_Availability::is_range_available( (int) $existing->property_id, $fields['check_in'], $fields['check_out'], $id ) ) {
+                $this->redirect( 'nira-bookings', __( 'Ces dates chevauchent une autre réservation.', 'nira-booking' ), 'error', [ 'edit' => $id ] );
+            }
+            $fields['nights'] = Nira_Pricing::count_nights( $fields['check_in'], $fields['check_out'] );
             $wpdb->update( Nira_DB::tbl( 'bookings' ), $fields, [ 'id' => $id ] );
         } else {
             $created = Nira_Booking::create( array_merge( $fields, [

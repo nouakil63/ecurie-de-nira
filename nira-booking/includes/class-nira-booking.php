@@ -47,15 +47,20 @@ class Nira_Booking {
 
         // 2) Libère tout hold précédent du même email pour cette propriété
         //    (évite de se bloquer soi-même quand on retente une réservation).
+        //    ANNULATION et non suppression : si le client avait déjà lancé un
+        //    paiement Stripe sur l'ancien hold, mark_paid() doit pouvoir
+        //    retrouver la ligne et la confirmer — sinon client débité sans
+        //    réservation en base.
         $email = sanitize_email( $args['guest_email'] ?? '' );
         if ( $email ) {
             $wpdb->query( $wpdb->prepare(
-                "DELETE FROM " . Nira_DB::tbl( 'bookings' ) . "
+                "UPDATE " . Nira_DB::tbl( 'bookings' ) . "
+                 SET status = 'cancelled', updated_at = %s
                  WHERE property_id = %d
                    AND guest_email = %s
                    AND status = 'pending'
                    AND payment_status = 'unpaid'",
-                (int) $property->id, $email
+                current_time( 'mysql' ), (int) $property->id, $email
             ) );
         }
 
@@ -72,7 +77,10 @@ class Nira_Booking {
 
         $now    = current_time( 'mysql' );
         $hold   = (int) Nira_Settings::get( 'hold_minutes', 30 );
-        $expire = gmdate( 'Y-m-d H:i:s', strtotime( $now ) + ( $hold * 60 ) );
+        // Même référentiel horaire (heure locale WP) que les comparaisons
+        // de cleanup_expired_holds() — gmdate() ici décalait l'expiration
+        // du décalage horaire du site.
+        $expire = date( 'Y-m-d H:i:s', current_time( 'timestamp' ) + ( $hold * 60 ) );
 
         $row = [
             'reference'      => self::generate_reference(),
@@ -125,26 +133,53 @@ class Nira_Booking {
         return false !== $r;
     }
 
+    /**
+     * Enregistre un paiement reçu et confirme la réservation.
+     *
+     * Idempotent : un même PaymentIntent déjà comptabilisé (webhook rejoué,
+     * ou webhook + confirmation AJAX en doublon) renvoie 'already' sans
+     * modifier les montants. Fonctionne aussi sur un hold expiré/annulé :
+     * l'argent a été encaissé, la réservation doit exister.
+     *
+     * @return true|'already'|false true = paiement enregistré,
+     *         'already' = déjà traité, false = réservation introuvable.
+     */
     public static function mark_paid( $id, $payment_intent, $amount ) {
         global $wpdb;
         $booking = self::get( $id );
         if ( ! $booking ) return false;
 
+        $payment_intent = sanitize_text_field( $payment_intent );
+        if ( $payment_intent && $booking->stripe_payment_intent === $payment_intent && (float) $booking->amount_paid > 0 ) {
+            return 'already';
+        }
+
         $paid       = (float) $booking->amount_paid + (float) $amount;
         $pay_status = $paid + 0.01 >= (float) $booking->total ? 'paid' : 'partial';
 
-        $wpdb->update(
-            Nira_DB::tbl( 'bookings' ),
-            [
-                'amount_paid'           => $paid,
-                'payment_status'        => $pay_status,
-                'status'                => 'confirmed',
-                'stripe_payment_intent' => sanitize_text_field( $payment_intent ),
-                'expires_at'            => null,
-                'updated_at'            => current_time( 'mysql' ),
-            ],
-            [ 'id' => (int) $id ]
-        );
+        $data = [
+            'amount_paid'           => $paid,
+            'payment_status'        => $pay_status,
+            'status'                => 'confirmed',
+            'stripe_payment_intent' => $payment_intent,
+            'expires_at'            => null,
+            'updated_at'            => current_time( 'mysql' ),
+        ];
+
+        // Hold annulé/expiré entre-temps : on confirme quand même (l'argent
+        // est encaissé) mais on signale un éventuel conflit de dates apparu
+        // depuis, pour que l'admin arbitre.
+        if ( 'pending' !== $booking->status && 'confirmed' !== $booking->status
+             && ! Nira_Availability::is_range_available( (int) $booking->property_id, $booking->check_in, $booking->check_out, (int) $id ) ) {
+            $data['notes'] = trim( $booking->notes . "\n" . __( '⚠ Paiement reçu après expiration du hold : conflit de dates possible, à vérifier.', 'nira-booking' ) );
+            wp_mail(
+                get_option( 'admin_email' ),
+                __( '[Nira] Conflit de dates possible', 'nira-booking' ),
+                sprintf( "La réservation %s a été payée après l'expiration de son hold et ses dates chevauchent une autre réservation. À vérifier dans l'admin.", $booking->reference )
+            );
+        }
+
+        $wpdb->update( Nira_DB::tbl( 'bookings' ), $data, [ 'id' => (int) $id ] );
         do_action( 'nira_booking_paid', (int) $id );
         return true;
     }
@@ -341,17 +376,34 @@ class Nira_Booking {
 
     /**
      * Nettoie les "hold" non payés qui ont expiré.
+     *
+     * ANNULATION et non suppression : si le webhook Stripe arrive après
+     * l'expiration (paiement lancé à la 29e minute, webhook lent ou en
+     * panne), mark_paid() doit encore pouvoir retrouver la ligne — sinon
+     * le client est débité et sa réservation disparaît sans trace.
+     * Les holds annulés jamais payés sont purgés après 30 jours.
      */
     public static function cleanup_expired_holds() {
         global $wpdb;
         $table = Nira_DB::tbl( 'bookings' );
+        $now   = current_time( 'mysql' );
         $wpdb->query( $wpdb->prepare(
-            "DELETE FROM {$table}
+            "UPDATE {$table}
+             SET status = 'cancelled', updated_at = %s
              WHERE status = 'pending'
                AND payment_status = 'unpaid'
                AND expires_at IS NOT NULL
                AND expires_at < %s",
-            current_time( 'mysql' )
+            $now, $now
+        ) );
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$table}
+             WHERE status = 'cancelled'
+               AND payment_status = 'unpaid'
+               AND amount_paid = 0
+               AND expires_at IS NOT NULL
+               AND updated_at < %s",
+            date( 'Y-m-d H:i:s', current_time( 'timestamp' ) - 30 * DAY_IN_SECONDS )
         ) );
     }
 
