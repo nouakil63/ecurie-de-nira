@@ -213,6 +213,16 @@ class Nira_Stripe {
                 }
             }
         } elseif ( 'charge.refunded' === $type ) {
+            // Remboursement fait depuis le dashboard Stripe : on répercute
+            // sur la réservation — un remboursement total libère les dates.
+            $pi      = sanitize_text_field( $obj['payment_intent'] ?? '' );
+            $booking = $pi ? Nira_Booking::get_by_payment_intent( $pi ) : null;
+            if ( $booking ) {
+                $refunded = (float) ( $obj['amount_refunded'] ?? 0 ) / 100;
+                $charged  = (float) ( $obj['amount'] ?? 0 ) / 100;
+                $fully    = ! empty( $obj['refunded'] ) || ( $charged > 0 && $refunded + 0.001 >= $charged );
+                Nira_Booking::record_external_refund( $booking, $refunded, $fully );
+            }
             do_action( 'nira_stripe_refund_webhook', $obj );
         }
 

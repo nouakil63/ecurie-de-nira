@@ -250,6 +250,36 @@ class Nira_Booking {
         ) );
     }
 
+    public static function get_by_payment_intent( $pi ) {
+        global $wpdb;
+        if ( ! $pi ) return null;
+        return $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . Nira_DB::tbl( 'bookings' ) . " WHERE stripe_payment_intent = %s",
+            $pi
+        ) );
+    }
+
+    /**
+     * Enregistre un remboursement effectué DEPUIS le dashboard Stripe
+     * (webhook charge.refunded). Un remboursement total libère les dates.
+     */
+    public static function record_external_refund( $booking, $refunded_total, $fully_refunded ) {
+        global $wpdb;
+        $data = [
+            'amount_refunded' => max( (float) $booking->amount_refunded, (float) $refunded_total ),
+            'updated_at'      => current_time( 'mysql' ),
+        ];
+        if ( $fully_refunded && ! in_array( $booking->status, [ 'cancelled', 'refunded' ], true ) ) {
+            $data['status'] = 'refunded';
+            $data['notes']  = trim( $booking->notes . "\n" . __( 'Remboursement effectué via le dashboard Stripe — dates libérées.', 'nira-booking' ) );
+        }
+        $wpdb->update( Nira_DB::tbl( 'bookings' ), $data, [ 'id' => (int) $booking->id ] );
+        if ( isset( $data['status'] ) ) {
+            do_action( 'nira_booking_status_changed', (int) $booking->id, 'refunded' );
+        }
+        return true;
+    }
+
     public static function get_by_reference( $ref ) {
         global $wpdb;
         return $wpdb->get_row( $wpdb->prepare(
