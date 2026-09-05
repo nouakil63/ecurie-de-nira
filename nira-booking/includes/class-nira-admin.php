@@ -638,7 +638,7 @@ class Nira_Admin {
     public function page_dashboard() {
         $stats = Nira_Booking::stats();
         $properties = Nira_Properties::instance()->all();
-        $recent = Nira_Booking::find( [ 'limit' => 10 ] );
+        $recent = Nira_Booking::find( [ 'limit' => 10, 'exclude_status' => 'pending' ] );
         include NIRA_BOOKING_PATH . 'templates/admin/dashboard.php';
     }
 
@@ -655,6 +655,12 @@ class Nira_Admin {
             'property_id' => $_GET['property_id'] ?? '',
             'search'      => $_GET['s'] ?? '',
         ];
+        // Par défaut, on masque les holds « en attente » : ce sont des paniers
+        // en cours de paiement qui expirent seuls, pas des réservations à
+        // gérer. Ils restent visibles en choisissant ce statut dans le filtre.
+        if ( '' === $filters['status'] ) {
+            $filters['exclude_status'] = 'pending';
+        }
         $bookings = Nira_Booking::find( $filters );
         $properties = Nira_Properties::instance()->all();
         include NIRA_BOOKING_PATH . 'templates/admin/bookings.php';

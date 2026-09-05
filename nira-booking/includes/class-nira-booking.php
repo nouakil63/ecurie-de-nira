@@ -302,6 +302,10 @@ class Nira_Booking {
             $where[] = 'status = %s';
             $args[]  = $filters['status'];
         }
+        if ( ! empty( $filters['exclude_status'] ) ) {
+            $where[] = 'status != %s';
+            $args[]  = $filters['exclude_status'];
+        }
         if ( ! empty( $filters['from'] ) ) {
             $where[] = 'check_out >= %s';
             $args[]  = $filters['from'];
