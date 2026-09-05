@@ -1,0 +1,856 @@
+/* ==========================================================================
+ * Nira Booking — Frontend widget
+ * Design tokens : bordeaux #A41C2B, anthracite #2D2D2D, sable #FDFBF9
+ * Typographie   : Inter (sans), Playfair Display (serif)
+ * ========================================================================== */
+
+/* ---- CSS custom properties on :root so overlays reparented to <body>
+        (calendar popover, backdrop, checkout modal) still inherit them. ---- */
+:root {
+    --nb-bordeaux: #A41C2B;
+    --nb-bordeaux-dark: #7E1420;
+    --nb-anthracite: #2D2D2D;
+    --nb-anthracite-soft: #4A4A4A;
+    --nb-sand: #FDFBF9;
+    --nb-cream: #F6F1EA;
+    --nb-border: #E5DED5;
+    --nb-text: #2D2D2D;
+    --nb-muted: #7A7268;
+    --nb-success: #2B7A4B;
+    --nb-danger: #A41C2B;
+    --nb-radius: 14px;
+    --nb-radius-sm: 10px;
+    --nb-shadow: 0 8px 30px rgba(45, 45, 45, .08);
+    --nb-shadow-lg: 0 18px 50px rgba(45, 45, 45, .18);
+    --nb-font-sans: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
+    --nb-font-serif: 'Playfair Display', Georgia, serif;
+}
+
+.nira-booking-wrap {
+    position: relative;
+    color: var(--nb-text);
+    font-family: var(--nb-font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.nira-booking-wrap *,
+.nira-booking-wrap *::before,
+.nira-booking-wrap *::after {
+    box-sizing: border-box;
+}
+
+.nira-booking-wrap [hidden] { display: none !important; }
+
+/* Overlays are reparented to <body> at runtime (to escape any transformed
+   ancestor that would break position: fixed). Their `display: ... !important`
+   rules below would otherwise win against [hidden], so we explicitly restore
+   the hidden behaviour here with the same specificity weight. */
+.nira-modal[hidden],
+.nira-calendar-popover[hidden],
+.nira-cal-backdrop[hidden] {
+    display: none !important;
+}
+
+/* ----------------------------- Card shell ----------------------------- */
+
+.nira-booking-card {
+    background: #fff;
+    border: 1px solid var(--nb-border);
+    border-radius: var(--nb-radius);
+    box-shadow: var(--nb-shadow);
+    padding: 26px;
+    max-width: 420px;
+    width: 100%;
+}
+
+.nira-bc-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 18px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--nb-border);
+}
+
+.nira-bc-price { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+
+.nira-bc-prefix {
+    flex-basis: 100%;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--nb-muted);
+    margin-bottom: 2px;
+    font-weight: 500;
+}
+
+.nira-bc-amount {
+    font-family: var(--nb-font-serif);
+    font-size: 30px;
+    font-weight: 600;
+    color: var(--nb-anthracite);
+    letter-spacing: -0.01em;
+}
+
+.nira-bc-period {
+    font-size: 14px;
+    color: var(--nb-muted);
+}
+
+.nira-bc-meta {
+    display: flex;
+    gap: 14px;
+    color: var(--nb-anthracite-soft);
+    font-size: 13px;
+}
+
+.nira-bc-meta i { color: var(--nb-bordeaux); margin-right: 4px; }
+
+.nira-bc-footer {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--nb-muted);
+    text-align: center;
+}
+
+.nira-bc-footer i { color: var(--nb-bordeaux); margin-right: 4px; }
+
+/* ----------------------------- Date picker ----------------------------- */
+
+.nira-date-picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1.5px solid var(--nb-border);
+    border-radius: var(--nb-radius-sm);
+    overflow: hidden;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .15s ease;
+}
+
+.nira-date-picker:hover { border-color: var(--nb-anthracite); }
+.nira-date-picker.is-open { border-color: var(--nb-anthracite); box-shadow: 0 0 0 3px rgba(45,45,45,.06); }
+
+.nira-date-field {
+    padding: 10px 12px;
+    background: #fff;
+    transition: background-color .15s ease;
+}
+
+.nira-date-field + .nira-date-field {
+    border-left: 1px solid var(--nb-border);
+}
+
+.nira-date-field.is-active {
+    background: var(--nb-cream);
+}
+
+.nira-date-field label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--nb-anthracite);
+    margin-bottom: 2px;
+}
+
+.nira-date-value {
+    display: block;
+    font-size: 14px;
+    color: var(--nb-text);
+}
+
+.nira-date-field:not(.has-value) .nira-date-value {
+    color: var(--nb-muted);
+}
+
+/* ----------------------------- Guest stepper ----------------------------- */
+
+.nira-guest-select {
+    border: 1.5px solid var(--nb-border);
+    border-radius: var(--nb-radius-sm);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #fff;
+}
+
+.nira-guest-select label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--nb-anthracite);
+}
+
+.nira-guest-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nira-step {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--nb-border);
+    background: #fff;
+    color: var(--nb-anthracite);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s ease;
+}
+
+.nira-step:hover:not(:disabled) {
+    border-color: var(--nb-anthracite);
+    background: var(--nb-cream);
+}
+
+.nira-step:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.nira-guest-value {
+    min-width: 18px;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* ----------------------------- Buttons ----------------------------- */
+
+.nira-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 15px 20px;
+    border: none;
+    border-radius: var(--nb-radius-sm);
+    background: var(--nb-bordeaux);
+    color: #fff;
+    font-family: var(--nb-font-sans);
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: all .18s ease;
+}
+
+.nira-btn-primary:hover:not(:disabled) {
+    background: var(--nb-bordeaux-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(164, 28, 43, .25);
+}
+
+.nira-btn-primary:disabled {
+    background: #C7BFB4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ----------------------------- Price breakdown ----------------------------- */
+
+.nira-price-breakdown {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--nb-border);
+    font-size: 14px;
+}
+
+.nira-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    color: var(--nb-anthracite-soft);
+}
+
+.nira-row.nira-sub .nira-row-label {
+    text-decoration: underline;
+    text-decoration-color: var(--nb-border);
+    text-underline-offset: 3px;
+}
+
+.nira-total-row {
+    padding-top: 12px;
+    margin-top: 8px;
+    border-top: 1px solid var(--nb-border);
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--nb-anthracite);
+}
+
+.nira-deposit-row {
+    color: var(--nb-bordeaux);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* ----------------------------- Calendar popover ----------------------------- */
+
+/* Voile sombre derrière le calendrier (élément DOM cliquable) */
+.nira-cal-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(28, 24, 20, .58) !important;
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+    z-index: 2147483640 !important;
+    animation: nira-fade-in .18s ease;
+    cursor: pointer;
+}
+
+@keyframes nira-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes nira-pop-in {
+    from { opacity: 0; transform: translate(-50%, -48%) scale(.98); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.nira-calendar-popover {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(680px, calc(100vw - 32px));
+    max-height: min(720px, calc(100vh - 48px));
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--nb-border);
+    border-radius: var(--nb-radius);
+    box-shadow: 0 30px 80px rgba(20, 16, 12, .35), 0 6px 18px rgba(20, 16, 12, .12);
+    padding: 24px 26px 22px;
+    z-index: 2147483641 !important;
+    animation: nira-pop-in .2s ease;
+}
+
+@media (max-width: 720px) {
+    .nira-calendar-popover {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 24px);
+        padding: 20px 16px;
+    }
+}
+
+/* Bouton X de fermeture du calendrier */
+.nira-cal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: var(--nb-cream);
+    color: var(--nb-anthracite);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: background-color .15s ease, transform .15s ease;
+    z-index: 2;
+}
+.nira-cal-close:hover { background: var(--nb-border); transform: scale(1.06); }
+.nira-cal-close:focus-visible { outline: 2px solid var(--nb-anthracite); outline-offset: 2px; }
+
+/* On laisse de l'air à droite du titre pour le X */
+.nira-calendar-popover .nira-cal-header { padding-right: 40px; }
+
+.nira-cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    gap: 12px;
+}
+
+.nira-cal-title {
+    /* The per-month titles inside .nira-cal-month h4 carry the real month name
+       in our two-month layout, so the global title in the popover header stays
+       empty and does not need to take any space. */
+    flex: 1;
+    min-width: 0;
+}
+
+.nira-cal-nav {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--nb-border);
+    background: #fff;
+    cursor: pointer;
+    color: var(--nb-anthracite);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s ease;
+}
+
+.nira-cal-nav:hover:not(:disabled) {
+    background: var(--nb-cream);
+    border-color: var(--nb-anthracite);
+}
+
+.nira-cal-nav:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.nira-cal-months {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    position: relative;
+}
+
+/* Vertical divider between the two months (purely decorative). */
+.nira-cal-months::before {
+    content: '';
+    position: absolute;
+    top: 32px;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--nb-border);
+    transform: translateX(-50%);
+    pointer-events: none;
+    opacity: .55;
+}
+
+/* À l'étroit, on empile les deux mois plutôt que de les écraser */
+@media (max-width: 720px) {
+    .nira-cal-months { grid-template-columns: 1fr; gap: 22px; }
+    .nira-cal-months::before { display: none; }
+}
+
+.nira-cal-month h4 {
+    text-align: center;
+    font-family: var(--nb-font-serif);
+    font-weight: 600;
+    font-size: 17px;
+    color: var(--nb-anthracite);
+    margin: 0 0 14px;
+    text-transform: capitalize;
+    letter-spacing: .01em;
+}
+
+.nira-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.nira-cal-dow {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--nb-muted);
+    padding: 2px 0 8px;
+    font-weight: 600;
+}
+
+.nira-cal-day {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    font-size: 14px;
+    color: var(--nb-anthracite);
+    background: transparent;
+    border: 1px solid transparent;
+    outline: none;
+    border-radius: 10px;
+    cursor: pointer;
+    padding: 2px;
+    transition: background .14s ease, color .14s ease, border-color .14s ease;
+    font-family: inherit;
+    transition: background-color .12s ease, color .12s ease;
+    position: relative;
+    line-height: 1;
+    gap: 2px;
+}
+
+.nira-cal-day__num {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.1;
+}
+
+.nira-cal-day__price {
+    font-size: 10px;
+    color: var(--nb-muted);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    margin-top: 1px;
+}
+
+.nira-cal-day.is-selected .nira-cal-day__price,
+.nira-cal-day.is-in-range .nira-cal-day__price { color: inherit; }
+
+.nira-cal-day.is-unavailable .nira-cal-day__price,
+.nira-cal-day.is-past .nira-cal-day__price { display: none; }
+
+.nira-cal-day:hover:not(:disabled):not(.is-unavailable):not(.is-past):not(.is-selected):not(.is-in-range) {
+    background: var(--nb-cream);
+    border-color: var(--nb-anthracite);
+}
+
+/* Focus visible (clavier) → ring discret, et seulement quand non sélectionné. */
+.nira-cal-day:focus { outline: none; }
+.nira-cal-day:focus-visible:not(.is-selected) {
+    outline: 2px solid var(--nb-anthracite);
+    outline-offset: 2px;
+}
+
+.nira-cal-day.is-empty { visibility: hidden; cursor: default; }
+
+.nira-cal-day.is-past {
+    color: #C9C0B4;
+    cursor: not-allowed;
+}
+.nira-cal-day.is-past .nira-cal-day__num { text-decoration: line-through; }
+
+.nira-cal-day.is-unavailable {
+    color: #C4BBAF;
+    cursor: not-allowed;
+    background: repeating-linear-gradient(
+        135deg,
+        transparent 0,
+        transparent 4px,
+        rgba(0, 0, 0, .04) 4px,
+        rgba(0, 0, 0, .04) 5px
+    );
+}
+.nira-cal-day.is-unavailable .nira-cal-day__num { text-decoration: line-through; }
+
+.nira-cal-day.is-selected,
+.nira-cal-day.is-selected:hover,
+.nira-cal-day.is-selected:focus {
+    background: var(--nb-anthracite) !important;
+    color: #fff !important;
+    border-color: var(--nb-anthracite) !important;
+    font-weight: 600;
+}
+
+.nira-cal-day.is-selected .nira-cal-day__num,
+.nira-cal-day.is-selected .nira-cal-day__price { color: #fff !important; }
+
+.nira-cal-day.is-in-range,
+.nira-cal-day.is-in-range:hover {
+    background: var(--nb-cream) !important;
+    border-color: transparent !important;
+    border-radius: 0;
+    color: var(--nb-anthracite);
+}
+
+.nira-cal-day.is-range-start {
+    border-top-left-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+
+.nira-cal-day.is-range-end {
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+
+.nira-cal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--nb-border);
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.nira-cal-legend {
+    display: flex;
+    gap: 18px;
+    font-size: 12px;
+    color: var(--nb-muted);
+}
+
+.nira-cal-legend span i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.nira-lg-available i { background: #fff; border: 1px solid var(--nb-border); }
+.nira-lg-unavail i   { background: #E5DED5; }
+
+.nira-cal-clear {
+    background: none;
+    border: none;
+    color: var(--nb-bordeaux);
+    cursor: pointer;
+    font-weight: 500;
+    text-decoration: underline;
+    font-family: inherit;
+}
+
+/* ----------------------------- Modal (checkout) ----------------------------- */
+
+.nira-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483642 !important;   /* au-dessus de tout (header, footer, sticky bars du thème) */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 24px;
+    animation: nira-fade .2s ease;
+}
+
+.nira-modal-backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+    background: rgba(28, 24, 20, .58) !important;
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+}
+
+/* Le dialogue lui-même au-dessus de tout */
+.nira-modal-dialog { z-index: 2147483643 !important; }
+
+@keyframes nira-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.nira-modal-dialog {
+    position: relative;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: var(--nb-shadow-lg);
+    max-width: 540px;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    padding: 28px;
+    animation: nira-rise .25s cubic-bezier(.2, .8, .2, 1);
+}
+
+@keyframes nira-rise {
+    from { transform: translateY(12px); opacity: 0; }
+    to   { transform: none;             opacity: 1; }
+}
+
+.nira-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: var(--nb-cream);
+    color: var(--nb-anthracite);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s ease;
+}
+
+.nira-modal-close:hover { background: var(--nb-border); }
+
+.nira-modal-dialog h2 {
+    font-family: var(--nb-font-serif);
+    font-size: 24px;
+    color: var(--nb-anthracite);
+    margin: 0 40px 16px 0;
+}
+
+.nira-modal-summary {
+    background: var(--nb-cream);
+    border-radius: var(--nb-radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    font-size: 13px;
+    color: var(--nb-anthracite-soft);
+}
+
+.nira-modal-summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+}
+
+.nira-modal-summary strong { color: var(--nb-anthracite); font-weight: 600; }
+
+.nira-modal-summary-total {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--nb-border);
+    font-weight: 700;
+    color: var(--nb-anthracite);
+    font-size: 15px;
+}
+
+/* Form */
+
+.nira-checkout-form label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--nb-anthracite);
+    margin-bottom: 14px;
+}
+
+.nira-checkout-form label > span { display: block; margin-bottom: 5px; }
+
+.nira-checkout-form input,
+.nira-checkout-form textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--nb-border);
+    border-radius: var(--nb-radius-sm);
+    background: #fff;
+    font: inherit;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--nb-text);
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.nira-checkout-form input:focus,
+.nira-checkout-form textarea:focus {
+    outline: none;
+    border-color: var(--nb-anthracite);
+    box-shadow: 0 0 0 3px rgba(45, 45, 45, .08);
+}
+
+.nira-checkout-form textarea { min-height: 80px; resize: vertical; }
+
+.nira-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 12px;
+    margin-bottom: 14px;
+}
+
+.nira-form-grid > label { margin-bottom: 0; }
+
+.nira-form-grid > label:first-child { grid-column: 1 / -1; }
+
+.nira-checkout-form .nira-full { display: block; }
+
+.nira-stripe-mount {
+    border: 1px solid var(--nb-border);
+    border-radius: var(--nb-radius-sm);
+    padding: 12px;
+    background: #fff;
+    min-height: 44px;
+    margin-bottom: 6px;
+}
+
+.nira-stripe-mount.is-focused {
+    border-color: var(--nb-anthracite);
+    box-shadow: 0 0 0 3px rgba(45, 45, 45, .08);
+}
+
+.nira-stripe-error {
+    background: #FDECEE;
+    color: var(--nb-bordeaux-dark);
+    border: 1px solid rgba(164, 28, 43, .2);
+    border-radius: var(--nb-radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    margin: 10px 0 0;
+}
+
+.nira-pay-btn {
+    margin-top: 14px;
+}
+
+.nira-pay-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, .4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: nira-spin .8s linear infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+    display: none; /* caché par défaut */
+}
+.nira-pay-btn.is-loading .nira-pay-spinner { display: inline-block; }
+
+/* Filet de sécurité général : tout élément `hidden` du widget reste caché */
+.nira-booking-wrap [hidden] { display: none !important; }
+
+@keyframes nira-spin { to { transform: rotate(360deg); } }
+
+/* Success state */
+
+.nira-success {
+    text-align: center;
+    padding: 24px 10px;
+}
+
+.nira-success i {
+    font-size: 52px;
+    color: var(--nb-success);
+    margin-bottom: 12px;
+}
+
+.nira-success h3 {
+    font-family: var(--nb-font-serif);
+    font-size: 24px;
+    margin: 0 0 10px;
+    color: var(--nb-anthracite);
+}
+
+.nira-success p { color: var(--nb-muted); font-size: 14px; }
+
+.nira-success-ref {
+    font-weight: 600;
+    color: var(--nb-anthracite);
+    letter-spacing: .05em;
+    font-size: 16px;
+}
+
+/* ----------------------------- Inline error ----------------------------- */
+
+.nira-error {
+    background: #FDECEE;
+    color: var(--nb-bordeaux-dark);
+    border: 1px solid rgba(164, 28, 43, .2);
+    border-radius: var(--nb-radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+/* ----------------------------- Responsive ----------------------------- */
+
+@media (max-width: 540px) {
+    .nira-booking-card { padding: 20px; border-radius: 12px; }
+    .nira-bc-amount   { font-size: 26px; }
+    .nira-form-grid   { grid-template-columns: 1fr; }
+    .nira-modal       { padding: 0; }
+    .nira-modal-dialog{ border-radius: 0; max-height: 100vh; height: 100vh; padding: 22px; }
+}
