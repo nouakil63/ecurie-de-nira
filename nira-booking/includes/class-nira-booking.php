@@ -321,11 +321,16 @@ class Nira_Booking {
     public static function action_url( $booking_id, $action ) {
         $token = self::action_token( $booking_id, $action );
         if ( ! $token ) return '';
+        // admin-ajax.php et non home_url() : les caches de page complets
+        // (IONOS, CDN…) servent la page d'accueil en cache sans exécuter
+        // WordPress, donc ?nira_action=… était ignoré et le lien renvoyait
+        // vers le site. admin-ajax n'est jamais mis en cache.
         return add_query_arg( [
+            'action'      => 'nira_page',
             'nira_action' => $action,
             'b'           => $booking_id,
             't'           => $token,
-        ], home_url( '/' ) );
+        ], admin_url( 'admin-ajax.php' ) );
     }
 
     public static function balance_due( $booking ) {

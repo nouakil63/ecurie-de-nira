@@ -5,7 +5,7 @@ Tags:              booking, reservation, airbnb, stripe, gite, equestre
 Requires at least: 6.0
 Tested up to:      6.6
 Requires PHP:      7.4
-Stable tag:        2.0.43
+Stable tag:        2.0.44
 License:           GPLv2 or later
 
 Système de réservation complet pour les gîtes des Écuries de Nira, avec
@@ -100,6 +100,9 @@ nira-booking/
 * Webhook Stripe signé (vérif via `whsec_…`).
 
 == Changelog ==
+
+= 2.0.44 =
+* Les liens des emails (« Payer le solde », « Annuler ma réservation ») passent désormais par admin-ajax.php au lieu de la page d'accueil : les caches de page complets (IONOS, CDN) servaient l'accueil en cache et ignoraient le lien, qui renvoyait vers le site au lieu de la page de paiement. Les anciens liens restent fonctionnels.
 
 = 2.0.43 =
 * Email admin dédié à chaque réservation payée : coordonnées du client, dates, montant payé, solde restant, message du client et lien direct vers la réservation dans l'admin — au lieu d'une copie de l'email client (qui contenait ses liens d'annulation et de paiement du solde).

@@ -20,7 +20,21 @@ final class Nira_Public_Actions {
     }
 
     private function __construct() {
+        // Ancien routage par la home (?nira_action=…) : conservé pour les
+        // liens déjà envoyés dans d'anciens emails.
         add_action( 'init', [ $this, 'route' ], 5 );
+        // Nouveau routage via admin-ajax.php : jamais mis en cache par les
+        // hébergeurs/CDN, contrairement à la page d'accueil.
+        add_action( 'wp_ajax_nira_page',        [ $this, 'route_ajax' ] );
+        add_action( 'wp_ajax_nopriv_nira_page', [ $this, 'route_ajax' ] );
+    }
+
+    public function route_ajax() {
+        nocache_headers();
+        $this->route();
+        // route() fait exit après rendu ; si les paramètres manquent, on
+        // termine proprement au lieu du "0" par défaut d'admin-ajax.
+        wp_die( esc_html__( 'Lien incomplet.', 'nira-booking' ), '', [ 'response' => 400 ] );
     }
 
     public function route() {
