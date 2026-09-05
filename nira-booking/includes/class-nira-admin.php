@@ -48,6 +48,24 @@ class Nira_Admin {
             $type = in_array( $_GET['nira_type'] ?? 'success', [ 'success', 'error', 'warning' ], true ) ? $_GET['nira_type'] : 'success';
             echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( $msg ) . '</p></div>';
         }
+
+        // Rappel permanent tant que le mode test est actif : des vrais clients
+        // pourraient réserver à 1 € si on oublie de le couper.
+        $tm = self::get_test_mode();
+        if ( $tm ) {
+            $property = Nira_Properties::instance()->get( (int) $tm['property_id'] );
+            printf(
+                '<div class="notice notice-warning"><p><strong>⚠ %s</strong> %s <a href="%s">%s</a></p></div>',
+                esc_html__( 'MODE TEST ACTIF :', 'nira-booking' ),
+                esc_html( sprintf(
+                    __( '« %s » est affiché à 1 €/nuit depuis le %s. N\'oubliez pas de le désactiver après votre test.', 'nira-booking' ),
+                    $property->name ?? '#' . (int) $tm['property_id'],
+                    $tm['activated_at'] ?? ''
+                ) ),
+                esc_url( admin_url( 'admin.php?page=nira-settings' ) ),
+                esc_html__( 'Désactiver et restaurer les prix', 'nira-booking' )
+            );
+        }
     }
 
     /* ---------------- POST handlers ---------------- */
@@ -77,7 +95,98 @@ class Nira_Admin {
             case 'send_confirmation_email': $this->send_confirmation_email(); break;
             case 'delete_booking':   $this->delete_booking(); break;
             case 'block_dates':      $this->block_dates(); break;
+            case 'test_mode_on':     $this->test_mode_on(); break;
+            case 'test_mode_off':    $this->test_mode_off(); break;
         }
+    }
+
+    /* ---------------- Mode test (1 €) ---------------- */
+
+    /**
+     * État du mode test : tableau snapshot ou null.
+     * Le snapshot contient les vrais prix, stockés en option WordPress,
+     * pour une restauration automatique à la désactivation.
+     */
+    public static function get_test_mode() {
+        $tm = get_option( 'nira_test_mode', null );
+        return is_array( $tm ) ? $tm : null;
+    }
+
+    private function test_mode_on() {
+        global $wpdb;
+
+        if ( self::get_test_mode() ) {
+            $this->redirect( 'nira-settings', __( 'Le mode test est déjà actif. Désactivez-le avant de le relancer.', 'nira-booking' ), 'warning' );
+        }
+
+        $property_id = (int) ( $_POST['property_id'] ?? 0 );
+        $property    = Nira_Properties::instance()->get( $property_id );
+        if ( ! $property ) {
+            $this->redirect( 'nira-settings', __( 'Hébergement introuvable.', 'nira-booking' ), 'error' );
+        }
+
+        // 1) Snapshot des valeurs actuelles (prix + règles tarifaires)
+        $snapshot = [
+            'property_id'  => $property_id,
+            'property'     => [
+                'base_price'           => $property->base_price,
+                'cleaning_fee'         => $property->cleaning_fee,
+                'deposit_pct'          => $property->deposit_pct,
+                'min_nights'           => $property->min_nights,
+                'weekly_discount_pct'  => $property->weekly_discount_pct,
+                'monthly_discount_pct' => $property->monthly_discount_pct,
+            ],
+            'rules'        => [],
+            'activated_at' => current_time( 'mysql' ),
+        ];
+        foreach ( Nira_Pricing::get_rules( $property_id ) as $rule ) {
+            $snapshot['rules'][ (int) $rule->id ] = [
+                'price'      => $rule->price,
+                'min_nights' => $rule->min_nights,
+            ];
+        }
+        update_option( 'nira_test_mode', $snapshot, false );
+
+        // 2) Passage à 1 € : prix de base ET règles saisonnières/hebdo
+        // (les règles priment sur le prix de base, il faut les écraser aussi).
+        // Acompte à 100 % : 30 % de 1 € serait sous le minimum Stripe (0,50 €)
+        // et le paiement échouerait.
+        $wpdb->update( Nira_DB::tbl( 'properties' ), [
+            'base_price'           => 1.00,
+            'cleaning_fee'         => 0,
+            'deposit_pct'          => 100,
+            'min_nights'           => 1,
+            'weekly_discount_pct'  => 0,
+            'monthly_discount_pct' => 0,
+        ], [ 'id' => $property_id ] );
+        foreach ( array_keys( $snapshot['rules'] ) as $rule_id ) {
+            $wpdb->update( Nira_DB::tbl( 'pricing_rules' ), [ 'price' => 1.00, 'min_nights' => 1 ], [ 'id' => $rule_id ] );
+        }
+
+        $this->redirect( 'nira-settings', sprintf(
+            __( 'Mode test activé : « %s » est à 1 €/nuit (ménage 0 €, paiement intégral, 1 nuit min). Les vrais prix sont sauvegardés et seront restaurés à la désactivation.', 'nira-booking' ),
+            $property->name
+        ), 'warning' );
+    }
+
+    private function test_mode_off() {
+        global $wpdb;
+
+        $snapshot = self::get_test_mode();
+        if ( ! $snapshot ) {
+            $this->redirect( 'nira-settings', __( 'Aucun mode test actif.', 'nira-booking' ), 'warning' );
+        }
+
+        $wpdb->update( Nira_DB::tbl( 'properties' ), $snapshot['property'], [ 'id' => (int) $snapshot['property_id'] ] );
+        foreach ( $snapshot['rules'] as $rule_id => $vals ) {
+            $wpdb->update( Nira_DB::tbl( 'pricing_rules' ), [
+                'price'      => $vals['price'],
+                'min_nights' => $vals['min_nights'],
+            ], [ 'id' => (int) $rule_id ] );
+        }
+        delete_option( 'nira_test_mode' );
+
+        $this->redirect( 'nira-settings', __( 'Mode test désactivé : les vrais prix ont été restaurés.', 'nira-booking' ) );
     }
 
     private function send_balance_request() {
@@ -589,7 +698,9 @@ class Nira_Admin {
     }
 
     public function page_settings() {
-        $settings = Nira_Settings::all();
+        $settings   = Nira_Settings::all();
+        $properties = Nira_Properties::instance()->all();
+        $test_mode  = self::get_test_mode();
         include NIRA_BOOKING_PATH . 'templates/admin/settings.php';
     }
 

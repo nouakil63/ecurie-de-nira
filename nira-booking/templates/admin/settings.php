@@ -57,4 +57,35 @@
 
         <p><button class="button button-primary button-large" type="submit"><?php esc_html_e( 'Enregistrer les réglages', 'nira-booking' ); ?></button></p>
     </form>
+
+    <div class="nira-card" style="margin-top:24px;border-left:4px solid <?php echo $test_mode ? '#d63638' : '#A41C2B'; ?>;">
+        <h2><?php esc_html_e( 'Mode test (1 €)', 'nira-booking' ); ?></h2>
+        <?php if ( $test_mode ) :
+            $tm_property = Nira_Properties::instance()->get( (int) $test_mode['property_id'] );
+        ?>
+            <p><strong style="color:#d63638;">⚠ <?php esc_html_e( 'Mode test ACTIF', 'nira-booking' ); ?></strong> —
+                <?php printf(
+                    esc_html__( '« %s » est à 1 €/nuit depuis le %s. Les vrais prix sont sauvegardés et seront restaurés automatiquement.', 'nira-booking' ),
+                    esc_html( $tm_property->name ?? '#' . (int) $test_mode['property_id'] ),
+                    esc_html( $test_mode['activated_at'] ?? '' )
+                ); ?></p>
+            <form method="post">
+                <?php wp_nonce_field( 'nira_admin_test_mode_off' ); ?>
+                <input type="hidden" name="nira_action" value="test_mode_off">
+                <button class="button button-primary" type="submit"><?php esc_html_e( 'Désactiver et restaurer les vrais prix', 'nira-booking' ); ?></button>
+            </form>
+        <?php else : ?>
+            <p><?php esc_html_e( "Passe temporairement un hébergement à 1 €/nuit pour tester une réservation réelle de bout en bout (ménage 0 €, paiement intégral, 1 nuit minimum). Les prix actuels (prix de base, ménage, acompte, remises et toutes les règles tarifaires) sont sauvegardés en base et restaurés automatiquement à la désactivation.", 'nira-booking' ); ?></p>
+            <form method="post">
+                <?php wp_nonce_field( 'nira_admin_test_mode_on' ); ?>
+                <input type="hidden" name="nira_action" value="test_mode_on">
+                <select name="property_id">
+                    <?php foreach ( $properties as $p ) : ?>
+                        <option value="<?php echo (int) $p->id; ?>" <?php selected( 'appartement', $p->slug ); ?>><?php echo esc_html( $p->name ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="button" type="submit" onclick="return confirm('<?php echo esc_js( __( 'Activer le mode test ? L\'hébergement sélectionné sera réservable à 1 €/nuit par de vrais visiteurs jusqu\'à la désactivation.', 'nira-booking' ) ); ?>');"><?php esc_html_e( 'Activer le mode test à 1 €', 'nira-booking' ); ?></button>
+            </form>
+        <?php endif; ?>
+    </div>
 </div>
