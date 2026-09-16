@@ -1,8 +1,10 @@
 <?php
 /**
  * Pages publiques d'action sur réservation :
- *  - /?nira_action=cancel&b={id}&t={token}     → page d'annulation
- *  - /?nira_action=pay_balance&b={id}&t={token} → page de paiement du solde
+ *  - nira_action=cancel      → page d'annulation (client)
+ *  - nira_action=pay_balance → page de paiement (client)
+ *  - nira_action=accept      → validation d'une demande (écurie, depuis l'email)
+ *  - nira_action=refuse      → refus d'une demande (écurie, depuis l'email)
  *
  * Tokens HMAC liés à la booking (id + reference + email + secret WP) :
  * impossibles à deviner sans accès au site.
@@ -45,7 +47,7 @@ final class Nira_Public_Actions {
         $booking_id = (int) $_GET['b'];
         $token      = sanitize_text_field( wp_unslash( $_GET['t'] ) );
 
-        if ( ! in_array( $action, [ 'cancel', 'pay_balance' ], true ) ) return;
+        if ( ! in_array( $action, [ 'cancel', 'pay_balance', 'accept', 'refuse' ], true ) ) return;
 
         $booking = Nira_Booking::get( $booking_id );
         if ( ! $booking ) {
@@ -59,8 +61,122 @@ final class Nira_Public_Actions {
             $this->handle_cancel( $booking );
         } elseif ( 'pay_balance' === $action ) {
             $this->handle_pay_balance( $booking );
+        } elseif ( 'accept' === $action || 'refuse' === $action ) {
+            $this->handle_decision( $booking, $action );
         }
         exit;
+    }
+
+    /* ============================================================
+       VALIDATION / REFUS D'UNE DEMANDE (écurie, depuis l'email)
+       ============================================================ */
+
+    private function handle_decision( $booking, $action ) {
+        $done    = false;
+        $error   = '';
+        $reason  = '';
+
+        // Le lien reçu par email n'agit JAMAIS sur un simple clic (GET) :
+        // les antivirus de messagerie et les aperçus de liens préchargent
+        // les URL, ce qui accepterait la demande à l'insu de l'écurie.
+        // Il faut valider le formulaire (POST) affiché ci-dessous.
+        $submitted = ! empty( $_POST['nira_decision'] )
+                     && check_admin_referer( 'nira_decision_' . $booking->id );
+
+        if ( $submitted ) {
+            $reason = sanitize_textarea_field( wp_unslash( $_POST['reason'] ?? '' ) );
+            $res = 'accept' === $action
+                ? Nira_Booking::accept_request( $booking->id )
+                : Nira_Booking::refuse_request( $booking->id, $reason );
+            if ( is_wp_error( $res ) ) {
+                $error = $res->get_error_message();
+            } else {
+                $done = true;
+            }
+            $booking = Nira_Booking::get( $booking->id );
+        } elseif ( ! in_array( $booking->status, [ 'requested' ], true ) ) {
+            $error = sprintf(
+                __( 'Cette demande a déjà été traitée (statut actuel : %s).', 'nira-booking' ),
+                Nira_Admin::status_label( $booking->status )['label']
+            );
+        }
+
+        $this->render_page( 'decision', [
+            'booking'  => $booking,
+            'property' => Nira_Properties::instance()->get( (int) $booking->property_id ),
+            'action'   => $action,
+            'done'     => $done,
+            'error'    => $error,
+        ] );
+    }
+
+    private function render_decision_body( $vars ) {
+        $b        = $vars['booking'];
+        $property = $vars['property'];
+        $accept   = 'accept' === $vars['action'];
+        $hours    = max( 1, (int) Nira_Settings::get( 'request_expiry_hours', 48 ) );
+
+        if ( ! empty( $vars['done'] ) ) : ?>
+            <div class="nb-success">
+                <strong><?php echo $accept ? '✓ Demande acceptée.' : '✓ Demande refusée.'; ?></strong>
+                <?php echo $accept
+                    ? 'Le client vient de recevoir son lien de paiement. Les dates sont réservées à son nom pendant ' . (int) $hours . ' heures.'
+                    : 'Le client vient d\'être informé par e-mail.'; ?>
+            </div>
+            <div class="nb-meta">
+                <div class="nb-meta-row"><span>Référence</span><strong><?php echo esc_html( $b->reference ); ?></strong></div>
+                <div class="nb-meta-row"><span>Client</span><strong><?php echo esc_html( $b->guest_name ); ?></strong></div>
+                <div class="nb-meta-row"><span>Dates</span><strong><?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_in ) ) ); ?> → <?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_out ) ) ); ?></strong></div>
+            </div>
+            <?php return;
+        endif;
+
+        if ( ! empty( $vars['error'] ) ) : ?>
+            <div class="nb-error"><?php echo esc_html( $vars['error'] ); ?></div>
+            <div class="nb-meta">
+                <div class="nb-meta-row"><span>Référence</span><strong><?php echo esc_html( $b->reference ); ?></strong></div>
+                <div class="nb-meta-row"><span>Client</span><strong><?php echo esc_html( $b->guest_name ); ?></strong></div>
+                <div class="nb-meta-row"><span>Dates</span><strong><?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_in ) ) ); ?> → <?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_out ) ) ); ?></strong></div>
+            </div>
+            <?php return;
+        endif;
+        ?>
+        <h1><?php echo $accept ? 'Accepter la <em>demande</em>.' : 'Refuser la <em>demande</em>.'; ?></h1>
+        <p><?php echo $accept
+            ? 'Vérifiez les informations puis confirmez : le client recevra aussitôt son lien de paiement.'
+            : 'Le client sera informé par e-mail que vous ne pouvez pas l\'accueillir à ces dates.'; ?></p>
+
+        <div class="nb-meta">
+            <div class="nb-meta-row"><span>Référence</span><strong><?php echo esc_html( $b->reference ); ?></strong></div>
+            <div class="nb-meta-row"><span>Hébergement</span><strong><?php echo esc_html( $property->name ?? '—' ); ?></strong></div>
+            <div class="nb-meta-row"><span>Client</span><strong><?php echo esc_html( $b->guest_name ); ?></strong></div>
+            <div class="nb-meta-row"><span>Contact</span><strong><?php echo esc_html( $b->guest_email ); ?><?php echo $b->guest_phone ? ' · ' . esc_html( $b->guest_phone ) : ''; ?></strong></div>
+            <div class="nb-meta-row"><span>Arrivée</span><strong><?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_in ) ) ); ?></strong></div>
+            <div class="nb-meta-row"><span>Départ</span><strong><?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_out ) ) ); ?></strong></div>
+            <div class="nb-meta-row"><span><?php echo (int) $b->nights; ?> nuits · <?php echo (int) $b->guest_count; ?> voyageur(s)</span><strong><?php echo number_format( (float) $b->total, 2, ',', ' ' ); ?> €</strong></div>
+        </div>
+
+        <?php if ( $b->notes ) : ?>
+            <p style="background:var(--sand);border-left:3px solid var(--bordeaux);border-radius:6px;padding:14px 18px;font-size:0.92rem;">
+                <strong>Message du client :</strong><br><?php echo nl2br( esc_html( $b->notes ) ); ?>
+            </p>
+        <?php endif; ?>
+
+        <form method="post">
+            <?php wp_nonce_field( 'nira_decision_' . $b->id ); ?>
+            <input type="hidden" name="nira_decision" value="1">
+            <?php if ( ! $accept ) : ?>
+                <label style="display:block;font-size:0.85rem;color:#666;margin-bottom:6px;">Motif ou message pour le client (optionnel)</label>
+                <textarea name="reason" rows="3" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-family:inherit;font-size:0.95rem;" placeholder="Ex. : les gîtes sont complets à ces dates, mais nous avons de la place la semaine suivante."></textarea>
+            <?php endif; ?>
+            <div class="nb-actions">
+                <button type="submit" class="nb-btn" <?php echo $accept ? 'style="background:#186837;"' : ''; ?>>
+                    <?php echo $accept ? 'Confirmer l\'acceptation' : 'Confirmer le refus'; ?>
+                </button>
+                <a href="<?php echo esc_url( admin_url( 'admin.php?page=nira-bookings&action=edit&id=' . (int) $b->id ) ); ?>" class="nb-btn nb-btn-light" style="text-decoration:none;display:inline-flex;align-items:center;">Voir dans l'admin</a>
+            </div>
+        </form>
+        <?php
     }
 
     /* ============================================================
@@ -110,6 +226,8 @@ final class Nira_Public_Actions {
 
         if ( in_array( $booking->status, [ 'cancelled', 'refunded' ], true ) ) {
             $error = __( 'Cette réservation est annulée.', 'nira-booking' );
+        } elseif ( 'requested' === $booking->status ) {
+            $error = __( "Votre demande est encore en cours d'examen : le paiement ne sera possible qu'après notre réponse.", 'nira-booking' );
         } elseif ( $remaining <= 0.01 ) {
             $error = __( 'Cette réservation est déjà entièrement payée.', 'nira-booking' );
         } else {
@@ -149,7 +267,16 @@ final class Nira_Public_Actions {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?php echo esc_html( $type === 'cancel' ? 'Annulation' : 'Paiement du solde' ); ?> · <?php echo esc_html( $business ); ?></title>
+    <?php
+    $nb_titles = [
+        'cancel'   => __( 'Annulation', 'nira-booking' ),
+        'decision' => __( 'Demande de réservation', 'nira-booking' ),
+    ];
+    $nb_title = $nb_titles[ $type ] ?? ( Nira_Booking::balance_due( $b ) >= (float) $b->total
+        ? __( 'Paiement de votre séjour', 'nira-booking' )
+        : __( 'Paiement du solde', 'nira-booking' ) );
+    ?>
+    <title><?php echo esc_html( $nb_title ); ?> · <?php echo esc_html( $business ); ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <?php if ( $type === 'pay_balance' && $stripe_pk ) : ?>
@@ -188,6 +315,8 @@ final class Nira_Public_Actions {
 
     <?php if ( $type === 'cancel' ) : ?>
         <?php $this->render_cancel_body( $vars ); ?>
+    <?php elseif ( $type === 'decision' ) : ?>
+        <?php $this->render_decision_body( $vars ); ?>
     <?php else : ?>
         <?php $this->render_pay_balance_body( $vars ); ?>
     <?php endif; ?>
@@ -246,13 +375,18 @@ final class Nira_Public_Actions {
             <?php return;
         endif;
         ?>
-        <h1>Paiement du <em>solde</em>.</h1>
+        <?php $full = $remaining + 0.01 >= (float) $b->total; ?>
+        <h1><?php echo $full ? 'Paiement de votre <em>séjour</em>.' : 'Paiement du <em>solde</em>.'; ?></h1>
         <p>Réservation <strong><?php echo esc_html( $b->reference ); ?></strong> — <?php echo esc_html( $property->name ?? '' ); ?></p>
 
         <div class="nb-meta">
+            <div class="nb-meta-row"><span>Arrivée</span><strong><?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_in ) ) ); ?></strong></div>
+            <div class="nb-meta-row"><span>Départ</span><strong><?php echo esc_html( wp_date( 'd/m/Y', strtotime( $b->check_out ) ) ); ?></strong></div>
             <div class="nb-meta-row"><span>Total séjour</span><strong><?php echo number_format( (float) $b->total, 2, ',', ' ' ); ?> €</strong></div>
-            <div class="nb-meta-row"><span>Acompte déjà versé</span><strong>− <?php echo number_format( (float) $b->amount_paid, 2, ',', ' ' ); ?> €</strong></div>
-            <div class="nb-meta-row" style="border-top:1px solid rgba(0,0,0,0.07);padding-top:10px;margin-top:6px;color:var(--bordeaux)"><span><strong>Solde à régler</strong></span><strong><?php echo number_format( $remaining, 2, ',', ' ' ); ?> €</strong></div>
+            <?php if ( ! $full ) : ?>
+                <div class="nb-meta-row"><span>Acompte déjà versé</span><strong>− <?php echo number_format( (float) $b->amount_paid, 2, ',', ' ' ); ?> €</strong></div>
+            <?php endif; ?>
+            <div class="nb-meta-row" style="border-top:1px solid rgba(0,0,0,0.07);padding-top:10px;margin-top:6px;color:var(--bordeaux)"><span><strong><?php echo $full ? 'Montant à régler' : 'Solde à régler'; ?></strong></span><strong><?php echo number_format( $remaining, 2, ',', ' ' ); ?> €</strong></div>
         </div>
 
         <div class="nb-stripe-mount" id="nira-stripe-balance"></div>
@@ -310,7 +444,7 @@ final class Nira_Public_Actions {
                         }
                         document.querySelector('.nb-card').innerHTML =
                             '<div class="nb-logo">Écurie de Nira</div>' +
-                            '<div class="nb-success"><strong>✓ Paiement reçu.</strong> Merci, votre solde est réglé. Un email de confirmation va vous être envoyé.</div>';
+                            '<div class="nb-success"><strong>✓ Paiement reçu.</strong> Merci, votre réservation est confirmée. Un email de confirmation va vous être envoyé.</div>';
                     }
                 });
             });

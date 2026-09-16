@@ -14,6 +14,19 @@
             <tr><th><?php esc_html_e( 'Logo (URL)', 'nira-booking' ); ?></th><td><input type="url" name="logo_url" value="<?php echo esc_attr( $settings['logo_url'] ); ?>" class="regular-text"></td></tr>
         </table>
 
+        <h2><?php esc_html_e( 'Prise de réservation', 'nira-booking' ); ?></h2>
+        <table class="form-table">
+            <tr><th><?php esc_html_e( 'Mode de réservation', 'nira-booking' ); ?></th>
+                <td><select name="booking_mode">
+                    <option value="request" <?php selected( $settings['booking_mode'] ?? 'request', 'request' ); ?>><?php esc_html_e( 'Demande de réservation (validation avant paiement)', 'nira-booking' ); ?></option>
+                    <option value="instant" <?php selected( $settings['booking_mode'] ?? 'request', 'instant' ); ?>><?php esc_html_e( 'Réservation immédiate (paiement en ligne direct)', 'nira-booking' ); ?></option>
+                </select>
+                <p class="description"><?php esc_html_e( "En mode demande : le client choisit ses dates et envoie une demande, vous recevez un e-mail avec les boutons Accepter / Refuser, et le lien de paiement n'est envoyé au client qu'après votre acceptation. Les dates ne sont bloquées qu'à partir de l'acceptation.", 'nira-booking' ); ?></p></td></tr>
+            <tr><th><?php esc_html_e( 'Délai de paiement après acceptation (heures)', 'nira-booking' ); ?></th>
+                <td><input type="number" min="1" max="720" name="request_expiry_hours" value="<?php echo esc_attr( $settings['request_expiry_hours'] ?? 48 ); ?>">
+                <p class="description"><?php esc_html_e( "Temps laissé au client pour régler une demande acceptée. Passé ce délai, les dates sont automatiquement remises en ligne.", 'nira-booking' ); ?></p></td></tr>
+        </table>
+
         <h2><?php esc_html_e( 'Paiement', 'nira-booking' ); ?></h2>
         <table class="form-table">
             <tr><th><?php esc_html_e( 'Devise', 'nira-booking' ); ?></th>

@@ -288,6 +288,174 @@ class Nira_Email {
         return self::send( $to, 'Nous avons bien reçu votre message — ' . $business_name, $body );
     }
 
+    /* ==============================================================
+       MODE DEMANDE DE RÉSERVATION
+       ============================================================== */
+
+    /**
+     * Récapitulatif commun (dates, client, montant) utilisé par les emails
+     * de demande.
+     */
+    private static function request_summary_table( $b, $property, $for_admin = false ) {
+        $rows = sprintf(
+            '<tr><td style="width:150px;"><strong>Référence</strong></td><td>%s</td></tr>
+             <tr><td><strong>Hébergement</strong></td><td>%s</td></tr>
+             <tr><td><strong>Arrivée</strong></td><td>%s</td></tr>
+             <tr><td><strong>Départ</strong></td><td>%s</td></tr>
+             <tr><td><strong>Nuits / voyageurs</strong></td><td>%d nuits — %d voyageur(s)</td></tr>
+             <tr><td><strong>Montant du séjour</strong></td><td><strong>%s €</strong></td></tr>',
+            esc_html( $b->reference ),
+            esc_html( $property->name ?? '—' ),
+            esc_html( wp_date( 'd/m/Y', strtotime( $b->check_in ) ) ),
+            esc_html( wp_date( 'd/m/Y', strtotime( $b->check_out ) ) ),
+            (int) $b->nights,
+            (int) $b->guest_count,
+            number_format( (float) $b->total, 2, ',', ' ' )
+        );
+
+        if ( $for_admin ) {
+            $rows .= sprintf(
+                '<tr><td><strong>Client</strong></td><td>%s — <a href="mailto:%s" style="color:#A41C2B;">%s</a>%s</td></tr>',
+                esc_html( $b->guest_name ),
+                esc_attr( $b->guest_email ), esc_html( $b->guest_email ),
+                $b->guest_phone ? ' — ' . esc_html( $b->guest_phone ) : ''
+            );
+        }
+
+        return '<table cellpadding="8" cellspacing="0" style="border:1px solid #eee;border-radius:8px;width:100%;margin:20px 0;">' . $rows . '</table>';
+    }
+
+    /**
+     * À l'écurie : nouvelle demande à valider, avec les boutons Accepter et
+     * Refuser (liens signés, aucune connexion nécessaire).
+     */
+    public static function send_request_admin( $booking_id ) {
+        $b = Nira_Booking::get( $booking_id );
+        if ( ! $b ) return;
+        $property   = Nira_Properties::instance()->get( $b->property_id );
+        $accept_url = Nira_Booking::action_url( $b->id, 'accept' );
+        $refuse_url = Nira_Booking::action_url( $b->id, 'refuse' );
+        $admin_url  = admin_url( 'admin.php?page=nira-bookings&action=edit&id=' . (int) $b->id );
+        $hours      = max( 1, (int) Nira_Settings::get( 'request_expiry_hours', 48 ) );
+
+        $body = sprintf(
+            '<h2 style="font-family:Georgia,serif;color:#A41C2B;margin-top:0;">Nouvelle demande de réservation</h2>
+             <p><strong>%s</strong> souhaite réserver. Les dates ne sont pas encore bloquées : elles le seront dès que vous aurez accepté.</p>
+             %s
+             %s
+             <p style="text-align:center;margin:30px 0 10px;">
+               <a href="%s" style="display:inline-block;background:#186837;color:#fff;padding:14px 34px;border-radius:6px;text-decoration:none;font-weight:600;margin:0 6px 10px;">✓ Accepter la demande</a>
+               <a href="%s" style="display:inline-block;background:#A41C2B;color:#fff;padding:14px 34px;border-radius:6px;text-decoration:none;font-weight:600;margin:0 6px 10px;">✕ Refuser</a>
+             </p>
+             <p style="font-size:13px;color:#888;text-align:center;">En acceptant, le client reçoit automatiquement son lien de paiement et dispose de %d heures pour régler son séjour. Les dates sont réservées pendant ce délai.</p>
+             <p style="margin-top:26px;font-size:13px;color:#888;">Vous pouvez aussi traiter cette demande depuis <a href="%s" style="color:#A41C2B;">l\'administration du site</a>.</p>',
+            esc_html( $b->guest_name ),
+            self::request_summary_table( $b, $property, true ),
+            $b->notes ? '<div style="background:#FDFBF9;border-left:3px solid #A41C2B;border-radius:6px;padding:14px 18px;margin:16px 0;font-size:14px;color:#555;"><strong>Message du client :</strong><br>' . nl2br( esc_html( $b->notes ) ) . '</div>' : '',
+            esc_url( $accept_url ),
+            esc_url( $refuse_url ),
+            $hours,
+            esc_url( $admin_url )
+        );
+
+        $admin = Nira_Settings::get( 'notification_email', get_option( 'admin_email' ) );
+        $reply_to = $b->guest_email ? [ 'Reply-To: ' . $b->guest_name . ' <' . $b->guest_email . '>' ] : [];
+        return self::send(
+            $admin,
+            sprintf( '[Nira] Demande de réservation %s — %s', $b->reference, $property->name ?? '' ),
+            $body,
+            $reply_to
+        );
+    }
+
+    /**
+     * Au client : accusé de réception de sa demande.
+     */
+    public static function send_request_received( $booking_id ) {
+        $b = Nira_Booking::get( $booking_id );
+        if ( ! $b ) return;
+        $property = Nira_Properties::instance()->get( $b->property_id );
+
+        $body = sprintf(
+            '<h2 style="font-family:Georgia,serif;color:#A41C2B;margin-top:0;">Votre demande est bien reçue</h2>
+             <p>Bonjour <strong>%s</strong>,</p>
+             <p>Nous avons reçu votre demande de réservation pour <strong>%s</strong>. Elle est en cours d\'examen : vous recevrez notre réponse par e-mail très prochainement.</p>
+             %s
+             <p style="background:#FDFBF9;border-left:3px solid #A41C2B;border-radius:6px;padding:16px 20px;font-size:14px;color:#555;">
+               <strong>Aucun paiement ne vous est demandé à ce stade.</strong> Si nous pouvons vous accueillir, vous recevrez un lien sécurisé pour régler votre séjour et confirmer définitivement votre réservation.
+             </p>
+             <p>À très bientôt,<br>L\'équipe des Écuries de Nira</p>',
+            esc_html( $b->guest_name ),
+            esc_html( $property->name ?? '' ),
+            self::request_summary_table( $b, $property )
+        );
+
+        return self::send( $b->guest_email, 'Demande de réservation reçue — ' . $b->reference, $body );
+    }
+
+    /**
+     * Au client : demande acceptée, avec son lien de paiement.
+     */
+    public static function send_request_accepted( $booking_id ) {
+        $b = Nira_Booking::get( $booking_id );
+        if ( ! $b ) return;
+        $property = Nira_Properties::instance()->get( $b->property_id );
+        $pay_url  = Nira_Booking::action_url( $b->id, 'pay_balance' );
+        $due      = Nira_Booking::balance_due( $b );
+        $deadline = $b->expires_at
+            ? wp_date( 'd/m/Y à H\\hi', strtotime( $b->expires_at ) )
+            : '';
+
+        $body = sprintf(
+            '<h2 style="font-family:Georgia,serif;color:#186837;margin-top:0;">Bonne nouvelle : votre demande est acceptée ✓</h2>
+             <p>Bonjour <strong>%s</strong>,</p>
+             <p>Nous avons le plaisir de vous accueillir à <strong>%s</strong> aux dates demandées. Vos dates sont réservées à votre nom : il ne reste qu\'à régler votre séjour pour confirmer définitivement.</p>
+             %s
+             <p style="text-align:center;margin:30px 0;">
+               <a href="%s" style="display:inline-block;background:#A41C2B;color:#fff;padding:16px 42px;border-radius:6px;text-decoration:none;font-weight:600;letter-spacing:1px;">PAYER %s €</a>
+             </p>
+             %s
+             <p style="font-size:13px;color:#888;text-align:center;">Paiement sécurisé par Stripe. Aucune donnée bancaire n\'est conservée par nos soins.</p>',
+            esc_html( $b->guest_name ),
+            esc_html( $property->name ?? '' ),
+            self::request_summary_table( $b, $property ),
+            esc_url( $pay_url ),
+            number_format( $due, 2, ',', ' ' ),
+            $deadline
+                ? '<p style="text-align:center;font-size:14px;color:#A41C2B;"><strong>À régler avant le ' . esc_html( $deadline ) . '</strong> — passé ce délai, les dates sont remises à la disposition d\'autres voyageurs.</p>'
+                : ''
+        );
+
+        return self::send( $b->guest_email, 'Votre réservation est acceptée — ' . $b->reference, $body );
+    }
+
+    /**
+     * Au client : demande refusée.
+     */
+    public static function send_request_refused( $booking_id, $reason = '' ) {
+        $b = Nira_Booking::get( $booking_id );
+        if ( ! $b ) return;
+        $property = Nira_Properties::instance()->get( $b->property_id );
+        $phone    = Nira_Settings::get( 'business_phone', '' );
+
+        $body = sprintf(
+            '<h2 style="font-family:Georgia,serif;color:#A41C2B;margin-top:0;">Votre demande de réservation</h2>
+             <p>Bonjour <strong>%s</strong>,</p>
+             <p>Nous sommes désolés : nous ne pouvons pas vous accueillir à <strong>%s</strong> aux dates demandées (%s → %s).</p>
+             %s
+             <p>N\'hésitez pas à nous proposer d\'autres dates%s — nous serons ravis de vous recevoir à une autre occasion.</p>
+             <p>Bien à vous,<br>L\'équipe des Écuries de Nira</p>',
+            esc_html( $b->guest_name ),
+            esc_html( $property->name ?? '' ),
+            esc_html( wp_date( 'd/m/Y', strtotime( $b->check_in ) ) ),
+            esc_html( wp_date( 'd/m/Y', strtotime( $b->check_out ) ) ),
+            $reason ? '<div style="background:#FDFBF9;border-left:3px solid #A41C2B;border-radius:6px;padding:14px 18px;margin:16px 0;font-size:14px;color:#555;">' . nl2br( esc_html( $reason ) ) . '</div>' : '',
+            $phone ? ', ou à nous appeler au ' . esc_html( $phone ) : ''
+        );
+
+        return self::send( $b->guest_email, 'Votre demande de réservation — ' . $b->reference, $body );
+    }
+
     public static function send_cancellation( $booking_id, $refund_amount ) {
         $b = Nira_Booking::get( $booking_id );
         if ( ! $b ) return;

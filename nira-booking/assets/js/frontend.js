@@ -13,6 +13,13 @@
 
     var CFG  = window.NiraBooking;
     var I18N = CFG.i18n || {};
+    // Mode demande : le widget n'encaisse rien, il envoie une demande que
+    // l'écurie accepte ou refuse ; le paiement se fait ensuite via le lien
+    // reçu par email.
+    var REQUEST_MODE = CFG.bookingMode === 'request';
+    var CTA_LABEL = REQUEST_MODE
+        ? (I18N.request || 'Demander à réserver')
+        : (I18N.reserve || 'Réserver');
 
     // ---------- Utils -------------------------------------------------------
 
@@ -580,7 +587,7 @@
         if (errorMsg) {
             bd.hidden = false;
             bd.innerHTML = '<div class="nira-error">' + errorMsg + '</div>';
-            this.setReserveLabel(I18N.reserve || 'Réserver', true);
+            this.setReserveLabel(CTA_LABEL, true);
             return;
         }
         if (!this.quote) {
@@ -606,11 +613,11 @@
             (q.tourist_tax ? ('<div class="nira-row nira-taxes-row"><span>Taxe de séjour</span><span>' + money(q.tourist_tax, sym) + '</span></div>') : '') +
             ((q.taxes - (q.tourist_tax || 0)) > 0.001 ? ('<div class="nira-row nira-taxes-row"><span>TVA</span><span>' + money(q.taxes - (q.tourist_tax || 0), sym) + '</span></div>') : '') +
             '<div class="nira-row nira-total-row"><span>' + (I18N.total || 'Total') + '</span><span>' + money(q.total, sym) + '</span></div>' +
-            (this.chargeMode === 'deposit' && q.deposit
+            (!REQUEST_MODE && this.chargeMode === 'deposit' && q.deposit
                 ? ('<div class="nira-row nira-deposit-row"><span>Acompte à verser</span><span>' + money(q.deposit, sym) + '</span></div>')
                 : '');
 
-        this.setReserveLabel(I18N.reserve || 'Réserver', false);
+        this.setReserveLabel(CTA_LABEL, false);
     };
 
     NiraWidget.prototype.setReserveLabel = function (label, disabled) {
@@ -638,7 +645,7 @@
         this.renderModalSummary();
         this.els.modal.hidden = false;
         document.body.style.overflow = 'hidden';
-        this.createHoldAndStripe();
+        if (!REQUEST_MODE) this.createHoldAndStripe();
     };
 
     NiraWidget.prototype.closeCheckout = function () {
@@ -665,7 +672,7 @@
         if (q.tourist_tax)  html += '<div class="nira-modal-summary-row"><span>Taxe de séjour</span><span>' + money(q.tourist_tax, sym) + '</span></div>';
         if ((q.taxes - (q.tourist_tax || 0)) > 0.001) html += '<div class="nira-modal-summary-row"><span>TVA</span><span>' + money(q.taxes - (q.tourist_tax || 0), sym) + '</span></div>';
         html += '<div class="nira-modal-summary-row nira-modal-summary-total"><span>Total</span><span>' + money(q.total, sym) + '</span></div>';
-        if (this.chargeMode === 'deposit' && q.deposit) {
+        if (!REQUEST_MODE && this.chargeMode === 'deposit' && q.deposit) {
             html += '<div class="nira-modal-summary-row" style="color:var(--nb-bordeaux);font-weight:600"><span>Acompte aujourd\'hui</span><span>' + money(q.deposit, sym) + '</span></div>';
         }
         this.els.modalSummary.innerHTML = html;
@@ -766,6 +773,34 @@
             return;
         }
 
+        // Mode demande : on enregistre la demande et on s'arrête là.
+        if (REQUEST_MODE) {
+            this.setPayLoading(true);
+            var self2 = this;
+            post('nira_create_request', {
+                property_id: this.propertyId,
+                check_in: toISO(this.checkIn),
+                check_out: toISO(this.checkOut),
+                guest_name: (fd.get('guest_name') || '').toString(),
+                guest_email: (fd.get('guest_email') || '').toString(),
+                guest_phone: (fd.get('guest_phone') || '').toString(),
+                guest_count: this.guests,
+                notes: (fd.get('notes') || '').toString()
+            }).then(function (res) {
+                self2.setPayLoading(false);
+                if (!res || !res.success) {
+                    self2.showStripeError((res && res.data && res.data.message) || (I18N.requestError || 'Erreur serveur.'));
+                    return;
+                }
+                self2.booking = res.data;
+                self2.renderSuccess();
+            }).catch(function () {
+                self2.setPayLoading(false);
+                self2.showStripeError(I18N.requestError || 'Erreur réseau.');
+            });
+            return;
+        }
+
         // If no hold yet, create it then continue
         var ready = this.booking
             ? Promise.resolve(this._stripeElement)
@@ -818,8 +853,9 @@
         if (this.booking && this.booking.reference) {
             this.els.successRef.textContent = 'Référence : ' + this.booking.reference;
         }
-        // Refresh calendar in background
-        this.loadCalendar();
+        // Les dates ne sont bloquées qu'après acceptation : en mode demande,
+        // rien n'a changé dans le calendrier.
+        if (!REQUEST_MODE) this.loadCalendar();
     };
 
     NiraWidget.prototype.setPayLoading = function (loading) {

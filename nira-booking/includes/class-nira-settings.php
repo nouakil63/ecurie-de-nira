@@ -20,6 +20,14 @@ class Nira_Settings {
             'tax_rate'             => 0.0,
             'tourist_tax'          => 0.0, // Taxe de séjour par nuit par personne
 
+            // Mode de réservation :
+            //  'request' = le client envoie une demande, l'écurie accepte ou
+            //              refuse, puis le client reçoit son lien de paiement
+            //  'instant' = paiement immédiat en ligne (réservation directe)
+            'booking_mode'         => 'request',
+            // Heures laissées au client pour payer une demande acceptée
+            'request_expiry_hours' => 48,
+
             // Paiement
             'charge_mode'          => 'deposit', // 'deposit' ou 'full'
             'stripe_pk'            => '',
@@ -91,6 +99,17 @@ class Nira_Settings {
                 continue;
             }
             $value = $data[ $key ];
+
+            // Listes fermées : on n'enregistre qu'une valeur connue.
+            $enums = [
+                'booking_mode'         => [ 'request', 'instant' ],
+                'charge_mode'          => [ 'deposit', 'full' ],
+                'default_cancellation' => [ 'flexible', 'moderate', 'strict' ],
+            ];
+            if ( isset( $enums[ $key ] ) && ! in_array( $value, $enums[ $key ], true ) ) {
+                continue;
+            }
+
             // Les clés secrètes masquées ne sont pas réécrites
             if ( in_array( $key, [ 'stripe_sk', 'stripe_webhook_secret' ], true ) && '••••••••' === $value ) {
                 continue;

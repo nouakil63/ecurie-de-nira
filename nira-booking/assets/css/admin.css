@@ -101,6 +101,8 @@
     color: #444;
     text-transform: capitalize;
 }
+.nira-pill.requested { background: #E8F0FE; color: #14458A; }
+.nira-pill.accepted  { background: #FFF4E4; color: #8A5A00; }
 .nira-pill.pending   { background: #FFF4E4; color: #8A5A00; }
 .nira-pill.confirmed { background: #E6F4EC; color: #1E6B3D; }
 .nira-pill.cancelled { background: #FDECEE; color: #8A1420; }

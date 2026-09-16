@@ -261,6 +261,11 @@ $IMG = [
         .tarif-list li > span:first-child {
             font-size: 0.93rem; color: var(--anthracite); font-weight: 400;
         }
+        .tarif-note {
+            margin: 14px 0 0; padding-top: 12px;
+            border-top: 1px dashed rgba(0,0,0,0.07);
+            font-size: 0.82rem; line-height: 1.5; color: #777; font-style: italic;
+        }
         .tarif-price {
             font-family: 'Playfair Display', serif; font-size: 1.35rem;
             color: var(--bordeaux); font-weight: 700; white-space: nowrap;
@@ -478,26 +483,25 @@ $IMG = [
                 <div class="tarif-card">
                     <div class="tarif-card-head"><span class="tarif-tag">Au mois</span></div>
                     <ul class="tarif-list">
-                        <li><span>Box standard sur paille</span><span class="tarif-price">580 €<small>/mois</small></span></li>
-                        <li><span>Box standard sur copeaux</span><span class="tarif-price">640 €<small>/mois</small></span></li>
-                        <li><span>Grand box sur paille</span><span class="tarif-price">680 €<small>/mois</small></span></li>
-                        <li><span>Grand box sur copeaux</span><span class="tarif-price">740 €<small>/mois</small></span></li>
+                        <li><span>Box sur paille</span><span class="tarif-price">610 €<small>/mois</small></span></li>
+                        <li><span>Box sur copeaux</span><span class="tarif-price">635 €<small>/mois</small></span></li>
                     </ul>
                 </div>
                 <div class="tarif-card">
                     <div class="tarif-card-head"><span class="tarif-tag">À la semaine</span></div>
                     <ul class="tarif-list">
-                        <li><span>Sur paille</span><span class="tarif-price">200 €<small>/sem.</small></span></li>
-                        <li><span>Sur copeaux</span><span class="tarif-price">280 €<small>/sem.</small></span></li>
+                        <li><span>Sur paille</span><span class="tarif-price">245 €<small>/sem.</small></span></li>
+                        <li><span>Sur copeaux</span><span class="tarif-price">300 €<small>/sem.</small></span></li>
                     </ul>
+                    <p class="tarif-note">Accès au paddock et aux installations possible (carrière, salle de soin, pansage…).</p>
                 </div>
                 <div class="tarif-card">
-                    <div class="tarif-card-head"><span class="tarif-tag">À la nuit</span></div>
+                    <div class="tarif-card-head"><span class="tarif-tag">À la journée</span></div>
                     <ul class="tarif-list">
-                        <li><span>Box vide</span><span class="tarif-price">30 €<small>/nuit</small></span></li>
-                        <li><span>Box sur paille</span><span class="tarif-price">35 €<small>/nuit</small></span></li>
-                        <li><span>Box sur copeaux</span><span class="tarif-price">45 €<small>/nuit</small></span></li>
+                        <li><span>Box sur paille</span><span class="tarif-price">45 €<small>/jour</small></span></li>
+                        <li><span>Box sur copeaux</span><span class="tarif-price">55 €<small>/jour</small></span></li>
                     </ul>
+                    <p class="tarif-note">Accès au paddock et aux installations possible (carrière, salle de soin, pansage…).</p>
                 </div>
             </div>
         </div>

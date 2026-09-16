@@ -3,7 +3,7 @@
  * Plugin Name:       Nira Booking — Écuries de Nira
  * Plugin URI:        https://ecuriedenira.fr
  * Description:       Système de réservation complet pour les gîtes : calendrier Airbnb-like, paiement Stripe, synchronisation iCal, tarifs saisonniers, horaires et annulations entièrement configurables.
- * Version:           2.0.47
+ * Version:           2.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NOK'S Consulting
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'NIRA_BOOKING_VERSION', '2.0.47' );
+define( 'NIRA_BOOKING_VERSION', '2.1.0' );
 define( 'NIRA_BOOKING_FILE',    __FILE__ );
 define( 'NIRA_BOOKING_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'NIRA_BOOKING_URL',     plugin_dir_url( __FILE__ ) );
@@ -807,6 +807,7 @@ body .editorial-hero-dark .breadcrumb span { color: #FFFFFF !important; }
             'stripeKey'  => Nira_Settings::get( 'stripe_pk', '' ),
             'currency'   => Nira_Settings::get( 'currency', 'EUR' ),
             'chargeMode' => Nira_Settings::get( 'charge_mode', 'deposit' ),
+            'bookingMode'=> Nira_Settings::get( 'booking_mode', 'request' ),
             'checkIn'    => Nira_Settings::get( 'checkin_time', '16:00' ),
             'checkOut'   => Nira_Settings::get( 'checkout_time', '11:00' ),
             'locale'     => get_locale(),
@@ -846,6 +847,9 @@ body .editorial-hero-dark .breadcrumb span { color: #FFFFFF !important; }
             'nights'         => __( 'nuits', 'nira-booking' ),
             'total'          => __( 'Total', 'nira-booking' ),
             'reserve'        => __( 'Réserver', 'nira-booking' ),
+            'request'        => __( 'Demander à réserver', 'nira-booking' ),
+            'requestSent'    => __( 'Demande envoyée', 'nira-booking' ),
+            'requestError'   => __( "Impossible d'envoyer la demande, merci de réessayer.", 'nira-booking' ),
             'unavailable'    => __( 'Indisponible', 'nira-booking' ),
             'minStay'        => __( 'Séjour minimum de %d nuits', 'nira-booking' ),
             'loading'        => __( 'Chargement…', 'nira-booking' ),

@@ -40,7 +40,11 @@ class Nira_Shortcode {
 
         wp_enqueue_style( 'nira-booking' );
         wp_enqueue_script( 'nira-booking' );
-        if ( Nira_Stripe::public_key() ) {
+
+        // Mode demande : aucun paiement dans le widget, Stripe est chargé
+        // plus tard sur la page de paiement envoyée par email.
+        $request_mode = 'request' === Nira_Settings::get( 'booking_mode', 'request' );
+        if ( ! $request_mode && Nira_Stripe::public_key() ) {
             wp_enqueue_script( 'nira-stripe', 'https://js.stripe.com/v3/', [], null, true );
         }
 
@@ -60,7 +64,8 @@ class Nira_Shortcode {
              data-currency="<?php echo esc_attr( $currency ); ?>"
              data-currency-symbol="<?php echo esc_attr( $symbol ); ?>"
              data-checkin-time="<?php echo esc_attr( $property->checkin_time ); ?>"
-             data-checkout-time="<?php echo esc_attr( $property->checkout_time ); ?>">
+             data-checkout-time="<?php echo esc_attr( $property->checkout_time ); ?>"
+             data-booking-mode="<?php echo $request_mode ? 'request' : 'instant'; ?>">
 
             <div class="nira-booking-card">
                 <div class="nira-bc-header">
@@ -101,11 +106,17 @@ class Nira_Shortcode {
                     <div class="nira-row nira-cleaning-row"><span><?php esc_html_e( 'Frais de ménage', 'nira-booking' ); ?></span><span class="nira-cleaning"></span></div>
                     <div class="nira-row nira-taxes-row" hidden><span><?php esc_html_e( 'Taxes', 'nira-booking' ); ?></span><span class="nira-tax-value"></span></div>
                     <div class="nira-row nira-total-row"><span><?php esc_html_e( 'Total', 'nira-booking' ); ?></span><span class="nira-total-value"></span></div>
-                    <div class="nira-row nira-deposit-row"><span><?php esc_html_e( 'Acompte à verser', 'nira-booking' ); ?></span><span class="nira-deposit-value"></span></div>
+                    <?php if ( ! $request_mode ) : ?>
+                        <div class="nira-row nira-deposit-row"><span><?php esc_html_e( 'Acompte à verser', 'nira-booking' ); ?></span><span class="nira-deposit-value"></span></div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="nira-bc-footer">
-                    <i class="fa-solid fa-shield-heart"></i> <?php esc_html_e( 'Paiement sécurisé par Stripe', 'nira-booking' ); ?>
+                    <?php if ( $request_mode ) : ?>
+                        <i class="fa-solid fa-circle-info"></i> <?php esc_html_e( 'Demande sans engagement — paiement uniquement après notre réponse', 'nira-booking' ); ?>
+                    <?php else : ?>
+                        <i class="fa-solid fa-shield-heart"></i> <?php esc_html_e( 'Paiement sécurisé par Stripe', 'nira-booking' ); ?>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -133,8 +144,15 @@ class Nira_Shortcode {
                 <div class="nira-modal-backdrop"></div>
                 <div class="nira-modal-dialog" role="dialog" aria-modal="true">
                     <button type="button" class="nira-modal-close" aria-label="<?php esc_attr_e( 'Fermer', 'nira-booking' ); ?>"><i class="fa-solid fa-xmark"></i></button>
-                    <h2><?php esc_html_e( 'Finaliser votre réservation', 'nira-booking' ); ?></h2>
+                    <h2><?php echo $request_mode
+                        ? esc_html__( 'Votre demande de réservation', 'nira-booking' )
+                        : esc_html__( 'Finaliser votre réservation', 'nira-booking' ); ?></h2>
                     <div class="nira-modal-summary"></div>
+                    <?php if ( $request_mode ) : ?>
+                        <p class="nira-request-hint">
+                            <?php esc_html_e( "Envoyez votre demande : nous vous répondons rapidement par e-mail. Si nous pouvons vous accueillir, vous recevrez un lien sécurisé pour régler votre séjour. Aucun paiement n'est demandé maintenant.", 'nira-booking' ); ?>
+                        </p>
+                    <?php endif; ?>
 
                     <form class="nira-checkout-form" autocomplete="on">
                         <div class="nira-form-grid">
@@ -152,20 +170,28 @@ class Nira_Shortcode {
                             <textarea name="notes" rows="2" placeholder="<?php esc_attr_e( 'Informations particulières, chevaux à accueillir, etc.', 'nira-booking' ); ?>"></textarea>
                         </label>
 
-                        <div class="nira-stripe-mount"></div>
+                        <?php if ( ! $request_mode ) : ?>
+                            <div class="nira-stripe-mount"></div>
+                        <?php endif; ?>
                         <div class="nira-stripe-error" hidden></div>
 
                         <button type="submit" class="nira-btn-primary nira-pay-btn">
-                            <span class="nira-pay-label"><?php esc_html_e( 'Payer et réserver', 'nira-booking' ); ?></span>
+                            <span class="nira-pay-label"><?php echo $request_mode
+                                ? esc_html__( 'Envoyer ma demande', 'nira-booking' )
+                                : esc_html__( 'Payer et réserver', 'nira-booking' ); ?></span>
                             <span class="nira-pay-spinner" hidden aria-hidden="true"></span>
                         </button>
                     </form>
 
                     <div class="nira-success" hidden>
                         <i class="fa-solid fa-circle-check"></i>
-                        <h3><?php esc_html_e( 'Réservation confirmée', 'nira-booking' ); ?></h3>
+                        <h3><?php echo $request_mode
+                            ? esc_html__( 'Demande envoyée', 'nira-booking' )
+                            : esc_html__( 'Réservation confirmée', 'nira-booking' ); ?></h3>
                         <p class="nira-success-ref"></p>
-                        <p><?php esc_html_e( 'Un e-mail récapitulatif vient de vous être envoyé.', 'nira-booking' ); ?></p>
+                        <p><?php echo $request_mode
+                            ? esc_html__( "Nous avons bien reçu votre demande et vous répondons rapidement par e-mail. Pensez à vérifier vos spams.", 'nira-booking' )
+                            : esc_html__( 'Un e-mail récapitulatif vient de vous être envoyé.', 'nira-booking' ); ?></p>
                     </div>
                 </div>
             </div>

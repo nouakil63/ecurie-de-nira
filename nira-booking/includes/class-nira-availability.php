@@ -19,7 +19,7 @@ class Nira_Availability {
             "SELECT id, reference, check_in, check_out, status, source, guest_name
              FROM {$table}
              WHERE property_id = %d
-               AND status IN ('confirmed','pending','blocked','airbnb')
+               AND status IN ('confirmed','accepted','pending','blocked','airbnb')
                AND check_out > %s AND check_in < %s
              ORDER BY check_in ASC",
             $property_id, $from, $to
@@ -47,7 +47,7 @@ class Nira_Availability {
         return 0 === (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$table}
              WHERE property_id = %d
-               AND status IN ('confirmed','pending','blocked','airbnb')
+               AND status IN ('confirmed','accepted','pending','blocked','airbnb')
                AND check_out > %s AND check_in < %s
                AND id != %d",
             $property_id, $check_in, $check_out, (int) $ignore_booking_id

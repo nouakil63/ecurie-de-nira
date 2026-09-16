@@ -24,6 +24,7 @@ class Nira_Ajax {
             'nira_get_calendar'     => 'get_calendar',
             'nira_get_quote'        => 'get_quote',
             'nira_create_hold'      => 'create_hold',
+            'nira_create_request'   => 'create_request',
             'nira_confirm_payment'  => 'confirm_payment',
             'nira_refresh_nonce'    => 'refresh_nonce',
         ];
@@ -162,6 +163,57 @@ class Nira_Ajax {
             'reference'     => $booking->reference,
             'amount'        => $intent['amount'],
             'client_secret' => $intent['client_secret'],
+        ] );
+    }
+
+    /**
+     * Demande de réservation (mode 'request') : aucun paiement à ce stade.
+     * L'écurie reçoit un email avec les liens Accepter / Refuser ; le client
+     * ne reçoit son lien de paiement qu'après acceptation.
+     */
+    public function create_request() {
+        $this->verify();
+
+        $payload = [
+            'property_id' => (int) ( $_POST['property_id'] ?? 0 ),
+            'check_in'    => sanitize_text_field( $_POST['check_in'] ?? '' ),
+            'check_out'   => sanitize_text_field( $_POST['check_out'] ?? '' ),
+            'guest_name'  => sanitize_text_field( $_POST['guest_name'] ?? '' ),
+            'guest_email' => sanitize_email( $_POST['guest_email'] ?? '' ),
+            'guest_phone' => sanitize_text_field( $_POST['guest_phone'] ?? '' ),
+            'guest_count' => (int) ( $_POST['guest_count'] ?? 1 ),
+            'notes'       => sanitize_textarea_field( $_POST['notes'] ?? '' ),
+            'source'      => 'direct',
+            'as_request'  => true,
+        ];
+
+        if ( empty( $payload['guest_email'] ) || empty( $payload['guest_name'] ) ) {
+            wp_send_json_error( [ 'message' => __( 'Nom et e-mail obligatoires.', 'nira-booking' ) ], 400 );
+        }
+
+        // Anti-abus : une demande n'engage à rien côté client, donc on limite
+        // le nombre d'envois par IP pour éviter le spam dans la boîte mail.
+        $ip  = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+        $key = 'nira_req_rl_' . md5( $ip );
+        $attempts = (int) get_transient( $key );
+        if ( $attempts >= 5 ) {
+            wp_send_json_error( [ 'message' => __( 'Trop de demandes envoyées, merci de réessayer dans quelques minutes.', 'nira-booking' ) ], 429 );
+        }
+        set_transient( $key, $attempts + 1, 15 * MINUTE_IN_SECONDS );
+
+        $booking_id = Nira_Booking::create( $payload );
+        if ( is_wp_error( $booking_id ) ) {
+            wp_send_json_error( [ 'message' => $booking_id->get_error_message() ], 400 );
+        }
+
+        $booking = Nira_Booking::get( $booking_id );
+        Nira_Email::send_request_admin( $booking_id );
+        Nira_Email::send_request_received( $booking_id );
+
+        wp_send_json_success( [
+            'booking_id' => $booking_id,
+            'reference'  => $booking->reference,
+            'requested'  => true,
         ] );
     }
 

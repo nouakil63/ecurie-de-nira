@@ -14,7 +14,7 @@
         </select>
         <select name="status">
             <option value=""><?php esc_html_e( 'Tous statuts', 'nira-booking' ); ?></option>
-            <?php foreach ( [ 'pending','confirmed','cancelled','refunded','blocked','airbnb' ] as $s ) : ?>
+            <?php foreach ( [ 'requested','accepted','confirmed','cancelled','refunded','blocked','airbnb','pending' ] as $s ) : ?>
                 <option value="<?php echo esc_attr( $s ); ?>" <?php selected( $_GET['status'] ?? '', $s ); ?>><?php echo esc_html( Nira_Admin::status_label( $s )['label'] ); ?></option>
             <?php endforeach; ?>
         </select>

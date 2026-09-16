@@ -5,7 +5,7 @@ Tags:              booking, reservation, airbnb, stripe, gite, equestre
 Requires at least: 6.0
 Tested up to:      6.6
 Requires PHP:      7.4
-Stable tag:        2.0.47
+Stable tag:        2.1.0
 License:           GPLv2 or later
 
 Système de réservation complet pour les gîtes des Écuries de Nira, avec
@@ -100,6 +100,15 @@ nira-booking/
 * Webhook Stripe signé (vérif via `whsec_…`).
 
 == Changelog ==
+
+= 2.1.0 =
+* Nouveau mode « demande de réservation » (activé par défaut, Réglages → Prise de réservation) : le client choisit ses dates et envoie une demande sans payer ; l'écurie reçoit un e-mail avec les boutons Accepter / Refuser ; le lien de paiement n'est envoyé au client qu'après acceptation.
+* Les dates ne sont bloquées qu'à partir de l'acceptation, puis réservées pendant un délai configurable (48 h par défaut) le temps que le client règle. Sans paiement dans ce délai, elles sont automatiquement remises en ligne.
+* La demande acceptée est réglée en une fois (montant total du séjour), sans acompte.
+* Les liens Accepter / Refuser demandent une confirmation sur une page dédiée : un antivirus de messagerie qui précharge le lien ne peut pas valider une demande à l'insu de l'écurie. Motif de refus optionnel, transmis au client.
+* Demandes également traitables depuis l'admin (fiche réservation), avec un bandeau « X demandes attendent votre réponse » sur toutes les pages du plugin.
+* Nouveaux statuts « Demande à traiter » et « Acceptée — à payer », e-mails dédiés (accusé de réception, acceptation avec lien de paiement, refus).
+* Tarifs pension mis à jour : 45 €/jour et 55 €/jour (paille/copeaux), 245 €/sem. et 300 €/sem., 610 €/mois et 635 €/mois, avec la mention de l'accès au paddock et aux installations.
 
 = 2.0.47 =
 * Annuler une réservation déjà remboursée depuis le dashboard Stripe fonctionne : le plugin prend acte du remboursement existant (« charge already refunded ») et termine l'annulation en libérant les dates, au lieu d'afficher une erreur et de laisser la réservation confirmée.

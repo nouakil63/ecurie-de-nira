@@ -49,6 +49,26 @@ class Nira_Admin {
             echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( $msg ) . '</p></div>';
         }
 
+        // Demandes de réservation en attente de réponse : c'est l'action la
+        // plus urgente de l'admin, on la signale partout.
+        $requests = Nira_Booking::pending_requests_count();
+        if ( $requests > 0 ) {
+            printf(
+                '<div class="notice notice-info"><p><strong>%s</strong> <a href="%s">%s</a></p></div>',
+                esc_html( sprintf(
+                    _n(
+                        '%d demande de réservation attend votre réponse.',
+                        '%d demandes de réservation attendent votre réponse.',
+                        $requests,
+                        'nira-booking'
+                    ),
+                    $requests
+                ) ),
+                esc_url( admin_url( 'admin.php?page=nira-bookings&status=requested' ) ),
+                esc_html__( 'Voir les demandes', 'nira-booking' )
+            );
+        }
+
         // Rappel permanent tant que le mode test est actif : des vrais clients
         // pourraient réserver à 1 € si on oublie de le couper.
         $tm = self::get_test_mode();
@@ -95,6 +115,8 @@ class Nira_Admin {
             case 'send_confirmation_email': $this->send_confirmation_email(); break;
             case 'delete_booking':   $this->delete_booking(); break;
             case 'block_dates':      $this->block_dates(); break;
+            case 'accept_request':   $this->accept_request(); break;
+            case 'refuse_request':   $this->refuse_request(); break;
             case 'test_mode_on':     $this->test_mode_on(); break;
             case 'test_mode_off':    $this->test_mode_off(); break;
         }
@@ -187,6 +209,25 @@ class Nira_Admin {
         delete_option( 'nira_test_mode' );
 
         $this->redirect( 'nira-settings', __( 'Mode test désactivé : les vrais prix ont été restaurés.', 'nira-booking' ) );
+    }
+
+    private function accept_request() {
+        $id  = (int) ( $_POST['id'] ?? 0 );
+        $res = Nira_Booking::accept_request( $id );
+        if ( is_wp_error( $res ) ) {
+            $this->redirect( 'nira-bookings', $res->get_error_message(), 'error', [ 'action' => 'edit', 'id' => $id ] );
+        }
+        $this->redirect( 'nira-bookings', __( 'Demande acceptée : le client a reçu son lien de paiement et les dates sont réservées.', 'nira-booking' ), 'success', [ 'action' => 'edit', 'id' => $id ] );
+    }
+
+    private function refuse_request() {
+        $id     = (int) ( $_POST['id'] ?? 0 );
+        $reason = sanitize_textarea_field( wp_unslash( $_POST['reason'] ?? '' ) );
+        $res    = Nira_Booking::refuse_request( $id, $reason );
+        if ( is_wp_error( $res ) ) {
+            $this->redirect( 'nira-bookings', $res->get_error_message(), 'error', [ 'action' => 'edit', 'id' => $id ] );
+        }
+        $this->redirect( 'nira-bookings', __( 'Demande refusée : le client a été informé par e-mail.', 'nira-booking' ), 'success', [ 'action' => 'edit', 'id' => $id ] );
     }
 
     private function send_balance_request() {
@@ -749,6 +790,8 @@ class Nira_Admin {
 
     public static function status_label( $status ) {
         $map = [
+            'requested' => [ 'label' => __( 'Demande à traiter', 'nira-booking' ), 'class' => 'requested' ],
+            'accepted'  => [ 'label' => __( 'Acceptée — à payer', 'nira-booking' ), 'class' => 'accepted' ],
             'pending'   => [ 'label' => __( 'En attente', 'nira-booking' ), 'class' => 'pending' ],
             'confirmed' => [ 'label' => __( 'Confirmée', 'nira-booking' ),  'class' => 'confirmed' ],
             'cancelled' => [ 'label' => __( 'Annulée', 'nira-booking' ),    'class' => 'cancelled' ],

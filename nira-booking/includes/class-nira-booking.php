@@ -75,6 +75,11 @@ class Nira_Booking {
 
         $quote = Nira_Pricing::quote( $property, $check_in, $check_out, $guest_count );
 
+        // Mode demande : la réservation n'est pas un panier de paiement mais
+        // une demande soumise à validation de l'écurie. Elle ne bloque pas
+        // les dates tant qu'elle n'est pas acceptée.
+        $as_request = ! empty( $args['as_request'] );
+
         $now    = current_time( 'mysql' );
         $hold   = (int) Nira_Settings::get( 'hold_minutes', 30 );
         // Même référentiel horaire (heure locale WP) que les comparaisons
@@ -100,12 +105,12 @@ class Nira_Booking {
             'amount_paid'    => 0,
             'currency'       => Nira_Settings::get( 'currency', 'EUR' ),
             'source'         => sanitize_text_field( $args['source'] ?? 'direct' ),
-            'status'         => 'pending',
+            'status'         => $as_request ? 'requested' : 'pending',
             'payment_status' => 'unpaid',
             'notes'          => sanitize_textarea_field( $args['notes'] ?? '' ),
             'created_at'     => $now,
             'updated_at'     => $now,
-            'expires_at'     => $expire,
+            'expires_at'     => $as_request ? null : $expire,
         ];
 
         $wpdb->insert( Nira_DB::tbl( 'bookings' ), $row );
@@ -120,7 +125,7 @@ class Nira_Booking {
 
     public static function update_status( $id, $status, $extra = [] ) {
         global $wpdb;
-        $allowed = [ 'pending', 'confirmed', 'cancelled', 'refunded', 'blocked', 'airbnb' ];
+        $allowed = [ 'requested', 'accepted', 'pending', 'confirmed', 'cancelled', 'refunded', 'blocked', 'airbnb' ];
         if ( ! in_array( $status, $allowed, true ) ) {
             return false;
         }
@@ -169,7 +174,7 @@ class Nira_Booking {
         // Hold annulé/expiré entre-temps : on confirme quand même (l'argent
         // est encaissé) mais on signale un éventuel conflit de dates apparu
         // depuis, pour que l'admin arbitre.
-        if ( 'pending' !== $booking->status && 'confirmed' !== $booking->status
+        if ( ! in_array( $booking->status, [ 'pending', 'accepted', 'confirmed' ], true )
              && ! Nira_Availability::is_range_available( (int) $booking->property_id, $booking->check_in, $booking->check_out, (int) $id ) ) {
             $data['notes'] = trim( $booking->notes . "\n" . __( '⚠ Paiement reçu après expiration du hold : conflit de dates possible, à vérifier.', 'nira-booking' ) );
             wp_mail(
@@ -182,6 +187,94 @@ class Nira_Booking {
         $wpdb->update( Nira_DB::tbl( 'bookings' ), $data, [ 'id' => (int) $id ] );
         do_action( 'nira_booking_paid', (int) $id );
         return true;
+    }
+
+    /**
+     * Accepte une demande de réservation : les dates sont réservées le temps
+     * que le client paie (délai configurable), et il reçoit son lien de
+     * paiement. Refuse l'opération si les dates ont été prises entre-temps.
+     */
+    public static function accept_request( $id, $notify = true ) {
+        global $wpdb;
+        $booking = self::get( $id );
+        if ( ! $booking ) {
+            return new WP_Error( 'nira_not_found', __( 'Demande introuvable.', 'nira-booking' ) );
+        }
+        if ( 'requested' !== $booking->status ) {
+            return new WP_Error( 'nira_not_a_request', sprintf(
+                __( 'Cette demande a déjà été traitée (statut : %s).', 'nira-booking' ),
+                $booking->status
+            ) );
+        }
+        if ( ! Nira_Availability::is_range_available( (int) $booking->property_id, $booking->check_in, $booking->check_out, (int) $id ) ) {
+            return new WP_Error( 'nira_unavailable', __( "Ces dates ne sont plus disponibles : elles ont été réservées entre-temps. Refusez la demande et proposez d'autres dates au client.", 'nira-booking' ) );
+        }
+
+        $hours = max( 1, (int) Nira_Settings::get( 'request_expiry_hours', 48 ) );
+        $wpdb->update(
+            Nira_DB::tbl( 'bookings' ),
+            [
+                'status'     => 'accepted',
+                'expires_at' => date( 'Y-m-d H:i:s', current_time( 'timestamp' ) + $hours * HOUR_IN_SECONDS ),
+                'updated_at' => current_time( 'mysql' ),
+            ],
+            [ 'id' => (int) $id ]
+        );
+
+        do_action( 'nira_booking_status_changed', (int) $id, 'accepted' );
+        if ( $notify && class_exists( 'Nira_Email' ) ) {
+            Nira_Email::send_request_accepted( (int) $id );
+        }
+        return true;
+    }
+
+    /**
+     * Refuse une demande de réservation et en informe le client.
+     */
+    public static function refuse_request( $id, $reason = '', $notify = true ) {
+        global $wpdb;
+        $booking = self::get( $id );
+        if ( ! $booking ) {
+            return new WP_Error( 'nira_not_found', __( 'Demande introuvable.', 'nira-booking' ) );
+        }
+        if ( ! in_array( $booking->status, [ 'requested', 'accepted' ], true ) ) {
+            return new WP_Error( 'nira_not_a_request', sprintf(
+                __( 'Cette demande a déjà été traitée (statut : %s).', 'nira-booking' ),
+                $booking->status
+            ) );
+        }
+        if ( (float) $booking->amount_paid > 0 ) {
+            return new WP_Error( 'nira_already_paid', __( 'Cette réservation a déjà été payée : passez par une annulation avec remboursement.', 'nira-booking' ) );
+        }
+
+        $note = __( 'Demande refusée par l\'écurie.', 'nira-booking' );
+        if ( $reason ) {
+            $note .= ' ' . $reason;
+        }
+        $wpdb->update(
+            Nira_DB::tbl( 'bookings' ),
+            [
+                'status'     => 'cancelled',
+                'expires_at' => null,
+                'notes'      => trim( $booking->notes . "\n" . $note ),
+                'updated_at' => current_time( 'mysql' ),
+            ],
+            [ 'id' => (int) $id ]
+        );
+
+        do_action( 'nira_booking_status_changed', (int) $id, 'cancelled' );
+        if ( $notify && class_exists( 'Nira_Email' ) ) {
+            Nira_Email::send_request_refused( (int) $id, $reason );
+        }
+        return true;
+    }
+
+    /**
+     * Nombre de demandes en attente de réponse (pour l'admin).
+     */
+    public static function pending_requests_count() {
+        global $wpdb;
+        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM " . Nira_DB::tbl( 'bookings' ) . " WHERE status = 'requested'" );
     }
 
     public static function cancel( $id, $reason = '', $override_refund = null ) {
@@ -446,6 +539,30 @@ class Nira_Booking {
                AND expires_at < %s",
             $now, $now
         ) );
+        // Demandes acceptées jamais payées : les dates doivent être libérées
+        // à l'expiration du délai laissé au client.
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$table}
+             SET status = 'cancelled', updated_at = %s,
+                 notes = CONCAT(COALESCE(notes,''), '\nDélai de paiement dépassé : dates libérées.')
+             WHERE status = 'accepted'
+               AND payment_status = 'unpaid'
+               AND amount_paid = 0
+               AND expires_at IS NOT NULL
+               AND expires_at < %s",
+            $now, $now
+        ) );
+
+        // Demandes jamais traitées dont les dates d'arrivée sont passées.
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$table}
+             SET status = 'cancelled', updated_at = %s,
+                 notes = CONCAT(COALESCE(notes,''), '\nDemande sans réponse, dates dépassées.')
+             WHERE status = 'requested'
+               AND check_in < %s",
+            $now, date( 'Y-m-d' )
+        ) );
+
         $wpdb->query( $wpdb->prepare(
             "DELETE FROM {$table}
              WHERE status = 'cancelled'

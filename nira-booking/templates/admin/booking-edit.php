@@ -97,6 +97,50 @@
             <?php if ( ! $is_cancelled ) : ?>
                 <h3 style="margin-top:24px;font-size:14px;text-transform:uppercase;letter-spacing:1.5px;color:#888;">Actions</h3>
 
+                <?php if ( 'requested' === $booking->status ) : ?>
+                    <div style="background:#E8F0FE;border-left:4px solid #14458A;border-radius:6px;padding:16px 18px;margin-bottom:16px;">
+                        <p style="margin:0 0 6px;font-weight:600;color:#14458A;">Demande à traiter</p>
+                        <p style="margin:0;font-size:13px;color:#555;">
+                            Les dates ne sont pas encore bloquées. En acceptant, elles sont réservées
+                            <?php echo (int) Nira_Settings::get( 'request_expiry_hours', 48 ); ?> h au nom du client,
+                            qui reçoit aussitôt son lien de paiement.
+                        </p>
+                    </div>
+
+                    <form method="post" style="margin-bottom:12px;">
+                        <?php wp_nonce_field( 'nira_admin_accept_request' ); ?>
+                        <input type="hidden" name="nira_action" value="accept_request">
+                        <input type="hidden" name="id" value="<?php echo (int) $booking->id; ?>">
+                        <button type="submit" class="button button-primary" style="width:100%;background:#186837;border-color:#186837;">
+                            ✓ Accepter la demande et envoyer le lien de paiement
+                        </button>
+                    </form>
+
+                    <details style="margin-bottom:18px;border:1px solid #eee;border-radius:6px;">
+                        <summary style="padding:12px 16px;cursor:pointer;background:#fafafa;border-radius:6px;font-weight:600;color:#A41C2B;">✕ Refuser la demande</summary>
+                        <div style="padding:18px;">
+                            <form method="post">
+                                <?php wp_nonce_field( 'nira_admin_refuse_request' ); ?>
+                                <input type="hidden" name="nira_action" value="refuse_request">
+                                <input type="hidden" name="id" value="<?php echo (int) $booking->id; ?>">
+                                <label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">Motif ou message pour le client (optionnel)</label>
+                                <textarea name="reason" rows="3" style="width:100%;" placeholder="Ex. : complet à ces dates, mais disponible la semaine suivante."></textarea>
+                                <button type="submit" class="button" style="width:100%;margin-top:10px;">Refuser et prévenir le client</button>
+                            </form>
+                        </div>
+                    </details>
+                <?php endif; ?>
+
+                <?php if ( 'accepted' === $booking->status ) : ?>
+                    <div style="background:#FFF4E4;border-left:4px solid #8A5A00;border-radius:6px;padding:16px 18px;margin-bottom:16px;">
+                        <p style="margin:0 0 6px;font-weight:600;color:#8A5A00;">Acceptée — en attente de paiement</p>
+                        <p style="margin:0;font-size:13px;color:#555;">
+                            Le client a reçu son lien de paiement<?php echo $booking->expires_at ? ' et doit régler avant le ' . esc_html( Nira_Admin::fr_date( $booking->expires_at ) ) : ''; ?>.
+                            Sans paiement dans ce délai, les dates sont libérées automatiquement.
+                        </p>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ( $balance_due > 0.01 && $deposit_paid ) : ?>
                 <form method="post" style="margin-bottom:12px;">
                     <?php wp_nonce_field( 'nira_admin_send_balance_request' ); ?>
