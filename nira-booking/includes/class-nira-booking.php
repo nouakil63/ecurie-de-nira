@@ -270,6 +270,31 @@ class Nira_Booking {
     }
 
     /**
+     * Demande identique déjà en attente (même hébergement, même email, mêmes
+     * dates) de moins d'une heure. Évite d'envoyer deux fois le même e-mail à
+     * l'écurie quand le visiteur reclique sur « Envoyer ma demande ».
+     */
+    public static function find_duplicate_request( $property_id, $email, $check_in, $check_out ) {
+        global $wpdb;
+        if ( ! $email ) return null;
+        return $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM " . Nira_DB::tbl( 'bookings' ) . "
+             WHERE property_id = %d
+               AND guest_email = %s
+               AND check_in = %s
+               AND check_out = %s
+               AND status = 'requested'
+               AND created_at > %s
+             ORDER BY id DESC LIMIT 1",
+            (int) $property_id,
+            $email,
+            $check_in,
+            $check_out,
+            date( 'Y-m-d H:i:s', current_time( 'timestamp' ) - HOUR_IN_SECONDS )
+        ) );
+    }
+
+    /**
      * Nombre de demandes en attente de réponse (pour l'admin).
      */
     public static function pending_requests_count() {

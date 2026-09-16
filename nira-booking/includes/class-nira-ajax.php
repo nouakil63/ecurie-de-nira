@@ -119,13 +119,24 @@ class Nira_Ajax {
         $this->verify();
 
         // Mode demande : aucun paiement direct. Si cet endpoint est appelé,
-        // c'est qu'un JS périmé (cache navigateur ou hébergeur) tourne encore
-        // sur la page. On refuse plutôt que de créer un panier de paiement
-        // fantôme qui bloquerait les dates pour rien.
+        // c'est qu'un JS périmé (cache navigateur, CDN ou plugin de
+        // minification) tourne encore sur la page. On enregistre malgré tout
+        // la demande — l'écurie est prévenue, rien n'est perdu — et on renvoie
+        // un message qui confirme l'envoi au visiteur.
         if ( 'request' === Nira_Settings::get( 'booking_mode', 'request' ) ) {
+            $res = $this->submit_request( $this->request_payload() );
+            if ( is_wp_error( $res ) ) {
+                wp_send_json_error( [ 'message' => $res->get_error_message() ], 400 );
+            }
             wp_send_json_error( [
-                'message' => __( 'Le formulaire a été mis à jour. Merci de recharger la page (Ctrl + F5) puis de renvoyer votre demande.', 'nira-booking' ),
-            ], 409 );
+                'message' => sprintf(
+                    /* translators: %s : référence de la demande */
+                    __( 'Votre demande a bien été envoyée (référence %s). Nous vous répondons par e-mail rapidement — aucun paiement ne vous est demandé maintenant.', 'nira-booking' ),
+                    $res['reference']
+                ),
+                'requested' => true,
+                'reference' => $res['reference'],
+            ], 200 );
         }
 
         $payload = [
@@ -177,14 +188,10 @@ class Nira_Ajax {
     }
 
     /**
-     * Demande de réservation (mode 'request') : aucun paiement à ce stade.
-     * L'écurie reçoit un email avec les liens Accepter / Refuser ; le client
-     * ne reçoit son lien de paiement qu'après acceptation.
+     * Lecture et nettoyage du formulaire de demande.
      */
-    public function create_request() {
-        $this->verify();
-
-        $payload = [
+    private function request_payload() {
+        return [
             'property_id' => (int) ( $_POST['property_id'] ?? 0 ),
             'check_in'    => sanitize_text_field( $_POST['check_in'] ?? '' ),
             'check_out'   => sanitize_text_field( $_POST['check_out'] ?? '' ),
@@ -196,9 +203,18 @@ class Nira_Ajax {
             'source'      => 'direct',
             'as_request'  => true,
         ];
+    }
 
+    /**
+     * Enregistre une demande et prévient l'écurie + le client.
+     * Renvoie la référence, ou un WP_Error. Une demande identique de moins
+     * d'une heure n'est pas dupliquée (double clic, JS périmé qui retente).
+     *
+     * @return array{booking_id:int,reference:string,duplicate:bool}|WP_Error
+     */
+    private function submit_request( $payload ) {
         if ( empty( $payload['guest_email'] ) || empty( $payload['guest_name'] ) ) {
-            wp_send_json_error( [ 'message' => __( 'Nom et e-mail obligatoires.', 'nira-booking' ) ], 400 );
+            return new WP_Error( 'nira_missing_fields', __( 'Nom et e-mail obligatoires.', 'nira-booking' ) );
         }
 
         // Anti-abus : une demande n'engage à rien côté client, donc on limite
@@ -207,22 +223,58 @@ class Nira_Ajax {
         $key = 'nira_req_rl_' . md5( $ip );
         $attempts = (int) get_transient( $key );
         if ( $attempts >= 5 ) {
-            wp_send_json_error( [ 'message' => __( 'Trop de demandes envoyées, merci de réessayer dans quelques minutes.', 'nira-booking' ) ], 429 );
+            return new WP_Error( 'nira_rate_limited', __( 'Trop de demandes envoyées, merci de réessayer dans quelques minutes.', 'nira-booking' ) );
         }
+
+        $dup = Nira_Booking::find_duplicate_request(
+            $payload['property_id'],
+            $payload['guest_email'],
+            $payload['check_in'],
+            $payload['check_out']
+        );
+        if ( $dup ) {
+            return [
+                'booking_id' => (int) $dup->id,
+                'reference'  => $dup->reference,
+                'duplicate'  => true,
+            ];
+        }
+
         set_transient( $key, $attempts + 1, 15 * MINUTE_IN_SECONDS );
 
         $booking_id = Nira_Booking::create( $payload );
         if ( is_wp_error( $booking_id ) ) {
-            wp_send_json_error( [ 'message' => $booking_id->get_error_message() ], 400 );
+            return $booking_id;
         }
 
-        $booking = Nira_Booking::get( $booking_id );
         Nira_Email::send_request_admin( $booking_id );
         Nira_Email::send_request_received( $booking_id );
 
-        wp_send_json_success( [
-            'booking_id' => $booking_id,
+        $booking = Nira_Booking::get( $booking_id );
+        return [
+            'booking_id' => (int) $booking_id,
             'reference'  => $booking->reference,
+            'duplicate'  => false,
+        ];
+    }
+
+    /**
+     * Demande de réservation (mode 'request') : aucun paiement à ce stade.
+     * L'écurie reçoit un email avec les liens Accepter / Refuser ; le client
+     * ne reçoit son lien de paiement qu'après acceptation.
+     */
+    public function create_request() {
+        $this->verify();
+
+        $res = $this->submit_request( $this->request_payload() );
+        if ( is_wp_error( $res ) ) {
+            $code = 'nira_rate_limited' === $res->get_error_code() ? 429 : 400;
+            wp_send_json_error( [ 'message' => $res->get_error_message() ], $code );
+        }
+
+        wp_send_json_success( [
+            'booking_id' => $res['booking_id'],
+            'reference'  => $res['reference'],
             'requested'  => true,
         ] );
     }
