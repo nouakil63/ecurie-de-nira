@@ -118,6 +118,16 @@ class Nira_Ajax {
     public function create_hold() {
         $this->verify();
 
+        // Mode demande : aucun paiement direct. Si cet endpoint est appelé,
+        // c'est qu'un JS périmé (cache navigateur ou hébergeur) tourne encore
+        // sur la page. On refuse plutôt que de créer un panier de paiement
+        // fantôme qui bloquerait les dates pour rien.
+        if ( 'request' === Nira_Settings::get( 'booking_mode', 'request' ) ) {
+            wp_send_json_error( [
+                'message' => __( 'Le formulaire a été mis à jour. Merci de recharger la page (Ctrl + F5) puis de renvoyer votre demande.', 'nira-booking' ),
+            ], 409 );
+        }
+
         $payload = [
             'property_id' => (int) ( $_POST['property_id'] ?? 0 ),
             'check_in'    => sanitize_text_field( $_POST['check_in'] ?? '' ),

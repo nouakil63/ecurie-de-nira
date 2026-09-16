@@ -3,7 +3,7 @@
  * Plugin Name:       Nira Booking — Écuries de Nira
  * Plugin URI:        https://ecuriedenira.fr
  * Description:       Système de réservation complet pour les gîtes : calendrier Airbnb-like, paiement Stripe, synchronisation iCal, tarifs saisonniers, horaires et annulations entièrement configurables.
- * Version:           2.1.0
+ * Version:           2.1.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NOK'S Consulting
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'NIRA_BOOKING_VERSION', '2.1.0' );
+define( 'NIRA_BOOKING_VERSION', '2.1.1' );
 define( 'NIRA_BOOKING_FILE',    __FILE__ );
 define( 'NIRA_BOOKING_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'NIRA_BOOKING_URL',     plugin_dir_url( __FILE__ ) );
@@ -786,18 +786,29 @@ body .editorial-hero-dark .breadcrumb span { color: #FFFFFF !important; }
         }
     }
 
+    /**
+     * Version d'un asset = version du plugin + date de modification du
+     * fichier. Indispensable : un CSS/JS modifié sans changement de version
+     * du plugin resterait servi depuis le cache navigateur ou celui de
+     * l'hébergeur, et un JS périmé avec un PHP à jour casse le widget.
+     */
+    public static function asset_ver( $relative ) {
+        $mtime = @filemtime( NIRA_BOOKING_PATH . $relative );
+        return NIRA_BOOKING_VERSION . ( $mtime ? '.' . $mtime : '' );
+    }
+
     public function enqueue_frontend() {
         wp_register_style(
             'nira-booking',
             NIRA_BOOKING_URL . 'assets/css/frontend.css',
             [],
-            NIRA_BOOKING_VERSION
+            self::asset_ver( 'assets/css/frontend.css' )
         );
         wp_register_script(
             'nira-booking',
             NIRA_BOOKING_URL . 'assets/js/frontend.js',
             [],
-            NIRA_BOOKING_VERSION,
+            self::asset_ver( 'assets/js/frontend.js' ),
             true
         );
         wp_localize_script( 'nira-booking', 'NiraBooking', [
@@ -823,13 +834,13 @@ body .editorial-hero-dark .breadcrumb span { color: #FFFFFF !important; }
             'nira-booking-admin',
             NIRA_BOOKING_URL . 'assets/css/admin.css',
             [],
-            NIRA_BOOKING_VERSION
+            self::asset_ver( 'assets/css/admin.css' )
         );
         wp_enqueue_script(
             'nira-booking-admin',
             NIRA_BOOKING_URL . 'assets/js/admin.js',
             [ 'jquery' ],
-            NIRA_BOOKING_VERSION,
+            self::asset_ver( 'assets/js/admin.js' ),
             true
         );
         wp_localize_script( 'nira-booking-admin', 'NiraAdmin', [

@@ -5,7 +5,7 @@ Tags:              booking, reservation, airbnb, stripe, gite, equestre
 Requires at least: 6.0
 Tested up to:      6.6
 Requires PHP:      7.4
-Stable tag:        2.1.0
+Stable tag:        2.1.1
 License:           GPLv2 or later
 
 Système de réservation complet pour les gîtes des Écuries de Nira, avec
@@ -100,6 +100,10 @@ nira-booking/
 * Webhook Stripe signé (vérif via `whsec_…`).
 
 == Changelog ==
+
+= 2.1.1 =
+* Les CSS et JS du plugin sont désormais versionnés avec la date de modification du fichier : un JS périmé servi par le cache du navigateur ou de l'hébergeur ne peut plus cohabiter avec un PHP à jour (symptôme : « Stripe n'est pas configuré » au moment d'envoyer une demande).
+* En mode demande, l'endpoint de paiement direct refuse explicitement les appels d'un JS périmé au lieu de créer un panier de paiement fantôme qui bloquait les dates pour rien.
 
 = 2.1.0 =
 * Nouveau mode « demande de réservation » (activé par défaut, Réglages → Prise de réservation) : le client choisit ses dates et envoie une demande sans payer ; l'écurie reçoit un e-mail avec les boutons Accepter / Refuser ; le lien de paiement n'est envoyé au client qu'après acceptation.
