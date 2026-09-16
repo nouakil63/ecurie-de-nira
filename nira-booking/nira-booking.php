@@ -3,7 +3,7 @@
  * Plugin Name:       Nira Booking — Écuries de Nira
  * Plugin URI:        https://ecuriedenira.fr
  * Description:       Système de réservation complet pour les gîtes : calendrier Airbnb-like, paiement Stripe, synchronisation iCal, tarifs saisonniers, horaires et annulations entièrement configurables.
- * Version:           2.1.2
+ * Version:           2.1.3
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NOK'S Consulting
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'NIRA_BOOKING_VERSION', '2.1.2' );
+define( 'NIRA_BOOKING_VERSION', '2.1.3' );
 define( 'NIRA_BOOKING_FILE',    __FILE__ );
 define( 'NIRA_BOOKING_PATH',    plugin_dir_path( __FILE__ ) );
 define( 'NIRA_BOOKING_URL',     plugin_dir_url( __FILE__ ) );
@@ -804,11 +804,15 @@ body .editorial-hero-dark .breadcrumb span { color: #FFFFFF !important; }
             [],
             self::asset_ver( 'assets/css/frontend.css' )
         );
+        // Fichier volontairement renommé (ex-frontend.js) : certains caches
+        // (CDN, plugins de minification) servent un bundle indexé sur le
+        // chemin et ignorent le paramètre de version. Un nouveau nom garantit
+        // que le navigateur télécharge bien le script à jour.
         wp_register_script(
             'nira-booking',
-            NIRA_BOOKING_URL . 'assets/js/frontend.js',
+            NIRA_BOOKING_URL . 'assets/js/booking.js',
             [],
-            self::asset_ver( 'assets/js/frontend.js' ),
+            self::asset_ver( 'assets/js/booking.js' ),
             true
         );
         wp_localize_script( 'nira-booking', 'NiraBooking', [
