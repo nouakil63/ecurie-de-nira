@@ -484,14 +484,14 @@ $IMG = [
                     <div class="tarif-card-head"><span class="tarif-tag">Au mois</span></div>
                     <ul class="tarif-list">
                         <li><span>Box sur paille</span><span class="tarif-price">610 €<small>/mois</small></span></li>
-                        <li><span>Box sur copeaux</span><span class="tarif-price">635 €<small>/mois</small></span></li>
+                        <li><span>Box sur copeaux</span><span class="tarif-price">680 €<small>/mois</small></span></li>
                     </ul>
                 </div>
                 <div class="tarif-card">
                     <div class="tarif-card-head"><span class="tarif-tag">À la semaine</span></div>
                     <ul class="tarif-list">
                         <li><span>Sur paille</span><span class="tarif-price">245 €<small>/sem.</small></span></li>
-                        <li><span>Sur copeaux</span><span class="tarif-price">680 €<small>/sem.</small></span></li>
+                        <li><span>Sur copeaux</span><span class="tarif-price">300 €<small>/sem.</small></span></li>
                     </ul>
                     <p class="tarif-note">Accès au paddock et aux installations possible (carrière, salle de soin, pansage…).</p>
                 </div>
