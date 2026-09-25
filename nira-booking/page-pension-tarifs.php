@@ -484,7 +484,7 @@ $IMG = [
                     <div class="tarif-card-head"><span class="tarif-tag">Au mois</span></div>
                     <ul class="tarif-list">
                         <li><span>Box sur paille</span><span class="tarif-price">610 €<small>/mois</small></span></li>
-                        <li><span>Box sur copeaux</span><span class="tarif-price">635 €<small>/mois</small></span></li>
+                        <li><span>Box sur copeaux</span><span class="tarif-price">680 €<small>/mois</small></span></li>
                     </ul>
                 </div>
                 <div class="tarif-card">
@@ -519,9 +519,10 @@ $IMG = [
                 <div class="tarif-card">
                     <div class="tarif-card-head"><span class="tarif-tag">Coaching</span></div>
                     <ul class="tarif-list">
-                        <li><span>À la séance</span><span class="tarif-price">30 €<small>TTC</small></span></li>
-                        <li><span>3× / semaine</span><span class="tarif-price">230 €<small>/mois</small></span></li>
-                        <li><span>5× / semaine</span><span class="tarif-price">300 €<small>/mois</small></span></li>
+                        <li><span>Séance montée</span><span class="tarif-price">30 €<small>TTC</small></span></li>
+                        <li><span>Cours</span><span class="tarif-price">35 €<small>TTC</small></span></li>
+                        <li><span>3× / semaine</span><span class="tarif-price">250 €<small>/mois</small></span></li>
+                        <li><span>5× / semaine</span><span class="tarif-price">330 €<small>/mois</small></span></li>
                     </ul>
                 </div>
                 <div class="tarif-card tarif-card-feature">
