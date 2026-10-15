@@ -506,6 +506,39 @@ $IMG = [
             </div>
         </div>
 
+        <!-- LA PENSION AU PRÉ -->
+        <div class="tarifs-block" data-aos="fade-up">
+            <div class="tarifs-block-head">
+                <div class="tarifs-icon"><i class="fa-solid fa-seedling"></i></div>
+                <div>
+                    <h3>La pension au pré</h3>
+                    <p>100 % au pré, pour un cheval qui vit dehors, au grand air et en liberté.</p>
+                </div>
+            </div>
+            <div class="tarifs-cards">
+                <div class="tarif-card">
+                    <div class="tarif-card-head"><span class="tarif-tag">Au mois</span></div>
+                    <ul class="tarif-list">
+                        <li><span>Sans grain</span><span class="tarif-price">250 €<small>/mois</small></span></li>
+                        <li><span>Avec grain</span><span class="tarif-price">300 €<small>/mois</small></span></li>
+                    </ul>
+                </div>
+                <div class="tarif-card">
+                    <div class="tarif-card-head"><span class="tarif-tag">À la semaine</span></div>
+                    <ul class="tarif-list">
+                        <li><span>Pension au pré</span><span class="tarif-price">150 €<small>/sem.</small></span></li>
+                    </ul>
+                </div>
+                <div class="tarif-card">
+                    <div class="tarif-card-head"><span class="tarif-tag">À la nuit</span></div>
+                    <ul class="tarif-list">
+                        <li><span>Pension au pré</span><span class="tarif-price">20 €<small>/nuit</small></span></li>
+                        <li><span>Supplément foin</span><span class="tarif-price">5 €<small>/jour/cheval</small></span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
         <!-- LE TRAVAIL -->
         <div class="tarifs-block" data-aos="fade-up">
             <div class="tarifs-block-head">
