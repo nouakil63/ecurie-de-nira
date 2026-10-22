@@ -484,7 +484,7 @@ $IMG = [
                     <div class="tarif-card-head"><span class="tarif-tag">Au mois</span></div>
                     <ul class="tarif-list">
                         <li><span>Box sur paille</span><span class="tarif-price">610 €<small>/mois</small></span></li>
-                        <li><span>Box sur copeaux</span><span class="tarif-price">635 €<small>/mois</small></span></li>
+                        <li><span>Box sur copeaux</span><span class="tarif-price">680 €<small>/mois</small></span></li>
                     </ul>
                 </div>
                 <div class="tarif-card">
@@ -493,7 +493,7 @@ $IMG = [
                         <li><span>Sur paille</span><span class="tarif-price">245 €<small>/sem.</small></span></li>
                         <li><span>Sur copeaux</span><span class="tarif-price">300 €<small>/sem.</small></span></li>
                     </ul>
-                    <p class="tarif-note">Accès au paddock et aux installations possible (carrière, salle de soin, pansage…).</p>
+                    <p class="tarif-note">Accès au paddock et aux installations compris (carrière, salle de soin, pansage…).</p>
                 </div>
                 <div class="tarif-card">
                     <div class="tarif-card-head"><span class="tarif-tag">À la journée</span></div>
@@ -501,7 +501,7 @@ $IMG = [
                         <li><span>Box sur paille</span><span class="tarif-price">45 €<small>/jour</small></span></li>
                         <li><span>Box sur copeaux</span><span class="tarif-price">55 €<small>/jour</small></span></li>
                     </ul>
-                    <p class="tarif-note">Accès au paddock et aux installations possible (carrière, salle de soin, pansage…).</p>
+                    <p class="tarif-note">Accès au paddock et aux installations compris (carrière, salle de soin, pansage…).</p>
                 </div>
             </div>
         </div>
@@ -513,6 +513,7 @@ $IMG = [
                 <div>
                     <h3>La pension au pré</h3>
                     <p>100 % au pré, pour un cheval qui vit dehors, au grand air et en liberté.</p>
+                    <p>Pendant la belle saison uniquement. <a href="<?php echo esc_url( home_url( '/contact' ) ); ?>">Contactez-nous pour plus d’informations.</a></p>
                 </div>
             </div>
             <div class="tarifs-cards">

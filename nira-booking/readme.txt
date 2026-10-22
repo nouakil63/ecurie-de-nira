@@ -5,7 +5,7 @@ Tags:              booking, reservation, airbnb, stripe, gite, equestre
 Requires at least: 6.0
 Tested up to:      6.6
 Requires PHP:      7.4
-Stable tag:        2.1.4
+Stable tag:        2.1.5
 License:           GPLv2 or later
 
 Système de réservation complet pour les gîtes des Écuries de Nira, avec
@@ -100,6 +100,11 @@ nira-booking/
 * Webhook Stripe signé (vérif via `whsec_…`).
 
 == Changelog ==
+
+= 2.1.5 =
+* Box sur copeaux au mois : tarif corrigé à 680 €.
+* Accès au paddock et aux installations indiqué comme compris dans les pensions à la semaine et à la journée.
+* Pension au pré : mention « Pendant la belle saison uniquement » et lien de contact pour plus d’informations.
 
 = 2.1.4 =
 * Page « Pension & Tarifs » : ajout de la pension au pré (100 % pré) — 250 € / mois sans grain, 300 € / mois avec grain, 150 € / semaine, 20 € / nuit + 5 € / jour / cheval pour le foin.
